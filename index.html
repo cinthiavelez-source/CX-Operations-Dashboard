@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CX Operations Dashboard — CookUnity</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --brand:#E85D04;--brand2:#F97316;--dark:#1E293B;--mid:#475569;--light:#94A3B8;
+  --bg:#F1F5F9;--card:#fff;--border:#E2E8F0;
+  --green-bg:#D1FAE5;--green-tx:#065F46;
+  --yellow-bg:#FEF3C7;--yellow-tx:#92400E;
+  --red-bg:#FEE2E2;--red-tx:#991B1B;
+  --orange-bg:#FFEDD5;--orange-tx:#9A3412;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--dark);font-size:14px}
+
+/* ── LOADING ── */
+.loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9000}
+.spinner{width:40px;height:40px;border:4px solid var(--border);border-top-color:var(--brand);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-msg{margin-top:12px;color:var(--mid);font-weight:600}
+
+/* ── LOGIN ── */
+.login-overlay{position:fixed;inset:0;background:linear-gradient(135deg,#1E293B 0%,#E85D04 100%);display:flex;align-items:center;justify-content:center;z-index:9999}
+.login-card{background:#fff;border-radius:16px;padding:40px;width:360px;box-shadow:0 25px 50px rgba(0,0,0,.3);text-align:center}
+.login-logo{font-size:48px;margin-bottom:12px}
+.login-card h1{font-size:22px;color:var(--dark);margin-bottom:4px}
+.login-card p{color:var(--mid);margin-bottom:24px;font-size:13px}
+.login-input{width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:8px;font-size:14px;outline:none;transition:border-color .2s}
+.login-input:focus{border-color:var(--brand)}
+.login-btn{width:100%;margin-top:12px;padding:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .2s}
+.login-btn:hover{opacity:.9}
+
+/* ── NAV ── */
+.navbar{background:linear-gradient(135deg,#1E293B 0%,#E85D04 100%);padding:0 20px;display:flex;align-items:center;gap:8px;min-height:52px;position:sticky;top:0;z-index:100;flex-wrap:wrap}
+.nav-brand{color:#fff;font-weight:800;font-size:16px;margin-right:8px;white-space:nowrap}
+.nav-brand span{opacity:.6;font-size:12px;font-weight:400}
+.nav-links{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+.nav-btn{background:rgba(255,255,255,.12);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:background .2s;white-space:nowrap}
+.nav-btn:hover,.nav-btn.active{background:rgba(255,255,255,.25)}
+.nav-right{display:flex;align-items:center;gap:8px;margin-left:auto}
+.nav-email{color:rgba(255,255,255,.75);font-size:12px}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#10B981}
+.sync-dot.syncing{background:#F59E0B;animation:pulse 1s infinite}
+.sync-dot.err{background:#EF4444}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── MAIN ── */
+.main{padding:20px;max-width:100%;overflow-x:hidden}
+.page{display:none}.page.active{display:block}
+
+/* ── PAGE HEADERS ── */
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+.page-header h2{font-size:20px;font-weight:700;color:var(--dark)}
+.toggle-group{display:flex;gap:4px;background:var(--border);padding:3px;border-radius:8px}
+.toggle-btn{padding:6px 16px;border:none;background:transparent;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;color:var(--mid);transition:all .2s}
+.toggle-btn.active{background:#fff;color:var(--brand);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+
+/* ── CARDS ── */
+.card{background:var(--card);border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:16px}
+.card h3{font-size:15px;font-weight:700;color:var(--dark);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--bg);border-radius:8px;padding:14px;text-align:center}
+.stat-val{font-size:22px;font-weight:800;color:var(--dark)}
+.stat-lbl{font-size:11px;color:var(--mid);margin-top:2px;text-transform:uppercase;letter-spacing:.4px}
+
+/* ── TABLES ── */
+.table-wrapper{overflow-x:auto;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+table{border-collapse:collapse;width:100%;background:#fff;font-size:12.5px}
+thead th{background:#1E293B;color:#fff;padding:8px 10px;white-space:nowrap;font-weight:600;font-size:11.5px;letter-spacing:.3px;text-align:center;position:sticky;top:0;z-index:10}
+thead th:first-child{position:sticky;left:0;z-index:20}
+thead th.group-header{background:#374151;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:#94A3B8}
+tbody tr:nth-child(even){background:#F8FAFC}
+tbody tr:hover{background:#EFF6FF}
+tbody td{padding:7px 10px;white-space:nowrap;border-bottom:1px solid var(--border);text-align:center;color:var(--dark)}
+tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-weight:700}
+.cell-green{background:var(--green-bg)!important;color:var(--green-tx)!important;font-weight:600}
+.cell-yellow{background:var(--yellow-bg)!important;color:var(--yellow-tx)!important;font-weight:600}
+.cell-red{background:var(--red-bg)!important;color:var(--red-tx)!important;font-weight:600}
+.cell-orange{background:var(--orange-bg)!important;color:var(--orange-tx)!important;font-weight:600}
+.cell-dim{color:var(--light)!important}
+.week-summary-row td{background:#E0F2FE!important;font-weight:700!important;font-size:12px}
+.week-summary-row td:first-child{background:#0284C7!important;color:#fff!important}
+.empty-state{text-align:center;padding:48px 20px;color:var(--mid)}
+.empty-state p{font-size:15px;margin-bottom:8px}
+.empty-state small{font-size:12px}
+
+/* ── UPLOAD GRID ── */
+.upload-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
+.upload-card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.07);border:2px solid var(--border)}
+.upload-card.highlight{border-color:var(--brand)}
+.upload-card h3{font-size:14px;font-weight:700;margin-bottom:6px;color:var(--dark);display:flex;align-items:center;gap:6px}
+.upload-card p{font-size:12px;color:var(--mid);margin-bottom:14px;line-height:1.5}
+.upload-zone{border:2px dashed var(--border);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--brand);background:#FFF7ED}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upload-zone p{color:var(--mid);font-size:12px;margin-top:4px}
+.upload-zone .uf-icon{font-size:28px;margin-bottom:6px}
+.upload-preview{margin-top:12px;background:#F8FAFC;border-radius:6px;padding:10px;font-size:11px;color:var(--mid);max-height:100px;overflow-y:auto}
+.upload-actions{display:flex;gap:8px;margin-top:12px}
+.btn{padding:8px 18px;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
+.btn-primary{background:var(--brand);color:#fff}.btn-primary:hover{background:#C2410C}
+.btn-secondary{background:var(--border);color:var(--dark)}.btn-secondary:hover{background:#CBD5E1}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.format-badge{display:inline-block;background:var(--orange-bg);color:var(--orange-tx);font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;margin-bottom:8px}
+
+/* ── KPI FORM ── */
+.kpi-form{max-width:700px}
+.form-section{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:16px}
+.form-section h3{font-size:14px;font-weight:700;color:var(--dark);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.5px}
+.form-group input,.form-group select{padding:8px 12px;border:2px solid var(--border);border-radius:7px;font-size:13px;outline:none;transition:border-color .2s;background:#fff}
+.form-group input:focus,.form-group select:focus{border-color:var(--brand)}
+.week-selector-bar{background:#fff;border-radius:12px;padding:16px 20px;box-shadow:0 1px 3px rgba(0,0,0,.07);margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.week-selector-bar label{font-size:12px;font-weight:700;color:var(--mid);text-transform:uppercase}
+.week-badge{background:var(--orange-bg);color:var(--orange-tx);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700}
+.form-actions{display:flex;gap:10px;margin-top:8px}
+.success-banner{background:var(--green-bg);color:var(--green-tx);padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:12px;display:none}
+
+/* ── TRACKER ── */
+.tracker-header{background:linear-gradient(135deg,#1E293B,#E85D04);color:#fff;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.tracker-header h3{font-size:16px;font-weight:700}
+.tracker-kpi-bar{display:flex;gap:20px;flex-wrap:wrap}
+.tracker-kpi{text-align:center}
+.tracker-kpi .val{font-size:18px;font-weight:800}
+.tracker-kpi .lbl{font-size:10px;opacity:.75;text-transform:uppercase;letter-spacing:.4px}
+.month-nav{display:flex;align-items:center;gap:8px}
+.month-nav button{background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:16px}
+.month-nav button:hover{background:rgba(255,255,255,.3)}
+#tracker-month-label{font-size:15px;font-weight:700;min-width:100px;text-align:center}
+.week-block{margin-bottom:12px}
+.week-block-header{background:#334155;color:#fff;padding:8px 12px;border-radius:6px 6px 0 0;display:flex;align-items:center;gap:16px;font-size:12px;font-weight:600}
+.week-block-header .wlbl{font-size:13px;font-weight:800;margin-right:8px}
+.wk-stat{opacity:.85}
+.wk-stat strong{color:#fff}
+
+/* ── ADMIN ── */
+.admin-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:700px){.admin-grid{grid-template-columns:1fr}}
+.roles-table{width:100%;border-collapse:collapse;font-size:13px}
+.roles-table th{background:var(--bg);padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.4px}
+.roles-table td{padding:8px 12px;border-bottom:1px solid var(--border)}
+.role-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
+.role-admin{background:#EDE9FE;color:#5B21B6}
+.role-editor{background:#DBEAFE;color:#1D4ED8}
+.role-viewer{background:var(--bg);color:var(--mid)}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;color:#fff;font-weight:600;font-size:13px;transform:translateY(80px);opacity:0;transition:all .3s cubic-bezier(.34,1.56,.64,1);z-index:10000;max-width:340px}
+.toast.show{transform:translateY(0);opacity:1}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-overlay" class="login-overlay">
+  <div class="login-card">
+    <div class="login-logo">🍽️</div>
+    <h1>CX Operations Dashboard</h1>
+    <p>CookUnity Customer Experience</p>
+    <input type="email" id="login-email" class="login-input" placeholder="you@cookunity.com" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="loading" class="loading-overlay" style="display:none">
+  <div class="spinner"></div>
+  <div class="loading-msg" id="loading-msg">Loading data…</div>
+</div>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="nav-brand">CX Ops <span>CookUnity</span></div>
+  <div class="nav-links">
+    <button class="nav-btn active" data-page="overview" onclick="navTo('overview')">📊 Overview</button>
+    <button class="nav-btn" data-page="tracker" onclick="navTo('tracker')">📅 Daily Tracker</button>
+    <button class="nav-btn" data-page="upload" onclick="navTo('upload')">⬆️ Upload Data</button>
+    <button class="nav-btn" data-page="kpi" onclick="navTo('kpi')">✏️ Log KPIs</button>
+    <button class="nav-btn" id="btn-admin" data-page="admin" onclick="navTo('admin')" style="display:none">⚙️ Admin</button>
+  </div>
+  <div class="nav-right">
+    <span class="nav-email" id="nav-email"></span>
+    <button class="nav-btn btn-sm" onclick="doLogout()">Sign Out</button>
+    <div class="sync-dot" id="sync-dot"></div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div class="main">
+
+<!-- ── OVERVIEW PAGE ── -->
+<div id="page-overview" class="page active">
+  <div class="page-header">
+    <h2>Operations Overview</h2>
+    <div class="toggle-group">
+      <button class="toggle-btn active" id="tb-weekly"    onclick="setOvMode('weekly')">Weekly</button>
+      <button class="toggle-btn"        id="tb-monthly"   onclick="setOvMode('monthly')">Monthly</button>
+      <button class="toggle-btn"        id="tb-quarterly" onclick="setOvMode('quarterly')">Quarterly</button>
+    </div>
+  </div>
+  <div id="overview-summary" class="stat-grid" style="margin-bottom:16px"></div>
+  <div class="table-wrapper">
+    <table id="overview-table"><thead></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<!-- ── DAILY TRACKER PAGE ── -->
+<div id="page-tracker" class="page">
+  <div class="tracker-header">
+    <div>
+      <h3>Daily Tracker</h3>
+      <div style="font-size:11px;opacity:.7;margin-top:2px">Forecast vs Solved Tickets · Current Month</div>
+    </div>
+    <div class="month-nav">
+      <button onclick="changeMonth(-1)">‹</button>
+      <span id="tracker-month-label">May 2026</span>
+      <button onclick="changeMonth(1)">›</button>
+    </div>
+  </div>
+  <div id="tracker-content"></div>
+</div>
+
+<!-- ── UPLOAD PAGE ── -->
+<div id="page-upload" class="page">
+  <div class="page-header"><h2>Upload Data</h2></div>
+  <div class="upload-grid">
+
+    <!-- Only Inbound (wide format) -->
+    <div class="upload-card highlight">
+      <div class="format-badge">WEEKLY</div>
+      <h3>📥 Inbound — Only Inbound</h3>
+      <p>Wide-format CSV with channels as rows and week dates as columns.<br>
+         Channels: <strong>sms + chat → Live</strong> | all others → Email</p>
+      <div class="upload-zone" id="zone-only" ondragover="dragOver(event,'zone-only')" ondragleave="dragLeave('zone-only')" ondrop="dropFile(event,'only-inbound')">
+        <input type="file" accept=".csv" id="file-only" onchange="fileChosen(event,'only-inbound')">
+        <div class="uf-icon">📂</div>
+        <strong id="fname-only-inbound">Choose file or drag here</strong>
+        <p>Inbound per channel (only inbound count).csv</p>
+      </div>
+      <div id="preview-only-inbound" class="upload-preview" style="display:none"></div>
+      <div class="upload-actions">
+        <button class="btn btn-primary" id="ubtn-only-inbound" onclick="doUpload('only-inbound')" disabled>Upload</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearUpload('only-inbound')">Clear</button>
+      </div>
+    </div>
+
+    <!-- Inbound + Outbound (long format) -->
+    <div class="upload-card highlight">
+      <div class="format-badge">WEEKLY</div>
+      <h3>📥 Inbound — Including Outbound</h3>
+      <p>Long-format CSV with Ticket channel, Week of Year, Tickets columns.<br>
+         <strong>Twilio SMS + Messaging → Live</strong> | all others → Email</p>
+      <div class="upload-zone" id="zone-total" ondragover="dragOver(event,'zone-total')" ondragleave="dragLeave('zone-total')" ondrop="dropFile(event,'inbound-total')">
+        <input type="file" accept=".csv" id="file-total" onchange="fileChosen(event,'inbound-total')">
+        <div class="uf-icon">📂</div>
+        <strong id="fname-inbound-total">Choose file or drag here</strong>
+        <p>Inbound per channel (inbound + outbound count).csv</p>
+      </div>
+      <div id="preview-inbound-total" class="upload-preview" style="display:none"></div>
+      <div class="upload-actions">
+        <button class="btn btn-primary" id="ubtn-inbound-total" onclick="doUpload('inbound-total')" disabled>Upload</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearUpload('inbound-total')">Clear</button>
+      </div>
+    </div>
+
+    <!-- Solved Tickets (daily) -->
+    <div class="upload-card highlight">
+      <div class="format-badge">DAILY</div>
+      <h3>✅ Solved Tickets</h3>
+      <p>Daily CSV with Ticket channel, Ticket solved - Date, Solved tickets.<br>
+         Upload daily — <strong>Twilio SMS + Messaging → Live</strong></p>
+      <div class="upload-zone" id="zone-solved" ondragover="dragOver(event,'zone-solved')" ondragleave="dragLeave('zone-solved')" ondrop="dropFile(event,'solved')">
+        <input type="file" accept=".csv" id="file-solved" onchange="fileChosen(event,'solved')">
+        <div class="uf-icon">📂</div>
+        <strong id="fname-solved">Choose file or drag here</strong>
+        <p>CM_Solved_Tickets_per_channel_*.csv</p>
+      </div>
+      <div id="preview-solved" class="upload-preview" style="display:none"></div>
+      <div class="upload-actions">
+        <button class="btn btn-primary" id="ubtn-solved" onclick="doUpload('solved')" disabled>Upload</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearUpload('solved')">Clear</button>
+      </div>
+    </div>
+
+    <!-- Inbound Daily (daily, optional) -->
+    <div class="upload-card">
+      <div class="format-badge">DAILY (optional)</div>
+      <h3>📥 Inbound — Daily Detail</h3>
+      <p>Optional: daily CSV with Ticket channel, Ticket created - Date, Tickets.<br>
+         Same format as Solved Tickets. Enables day-level inbound actuals in tracker.</p>
+      <div class="upload-zone" id="zone-inboundD" ondragover="dragOver(event,'zone-inboundD')" ondragleave="dragLeave('zone-inboundD')" ondrop="dropFile(event,'inbound-daily')">
+        <input type="file" accept=".csv" id="file-inboundD" onchange="fileChosen(event,'inbound-daily')">
+        <div class="uf-icon">📂</div>
+        <strong id="fname-inbound-daily">Choose file or drag here</strong>
+        <p>CM_Inbound_per_channel_*.csv</p>
+      </div>
+      <div id="preview-inbound-daily" class="upload-preview" style="display:none"></div>
+      <div class="upload-actions">
+        <button class="btn btn-primary" id="ubtn-inbound-daily" onclick="doUpload('inbound-daily')" disabled>Upload</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearUpload('inbound-daily')">Clear</button>
+      </div>
+    </div>
+
+    <!-- Forecast -->
+    <div class="upload-card">
+      <div class="format-badge">FORECAST</div>
+      <h3>🎯 Weekly Forecast</h3>
+      <p>Upload "Weekly &amp; Daily Forecast" CSV to seed inbound targets.<br>
+         Format: Week, Date, SMS, Chat, SoMe, Email columns with weekly total rows.</p>
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:700;color:var(--mid);display:block;margin-bottom:4px">TARGET YEAR (enter if CSV dates are from a prior year)</label>
+        <input type="number" id="fcst-year" value="2026" style="width:100px;padding:6px 10px;border:2px solid var(--border);border-radius:6px;font-size:13px">
+      </div>
+      <div class="upload-zone" id="zone-forecast" ondragover="dragOver(event,'zone-forecast')" ondragleave="dragLeave('zone-forecast')" ondrop="dropFile(event,'forecast')">
+        <input type="file" accept=".csv" id="file-forecast" onchange="fileChosen(event,'forecast')">
+        <div class="uf-icon">📂</div>
+        <strong id="fname-forecast">Choose file or drag here</strong>
+        <p>Inbound and HC - 2026 - Weekly &amp; Daily Forecast.csv</p>
+      </div>
+      <div id="preview-forecast" class="upload-preview" style="display:none"></div>
+      <div class="upload-actions">
+        <button class="btn btn-primary" id="ubtn-forecast" onclick="doUpload('forecast')" disabled>Upload</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearUpload('forecast')">Clear</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── LOG KPIs PAGE ── -->
+<div id="page-kpi" class="page">
+  <div class="page-header"><h2>Log Weekly KPIs</h2></div>
+  <div class="kpi-form">
+    <div class="week-selector-bar">
+      <label>Select Week</label>
+      <select id="kpi-week-select" onchange="onKpiWeekChange()" style="padding:7px 12px;border:2px solid var(--border);border-radius:7px;font-size:13px;outline:none">
+        <option value="">— choose a week —</option>
+      </select>
+      <span id="kpi-week-badge" class="week-badge" style="display:none"></span>
+    </div>
+    <div id="kpi-success" class="success-banner">✅ KPIs saved successfully!</div>
+    <div class="form-section">
+      <h3>⚡ Quality & Service Level</h3>
+      <div class="form-grid">
+        <div class="form-group"><label>SLA %</label><input type="number" id="kpi-sla" min="0" max="100" step="0.1" placeholder="e.g. 87"></div>
+        <div class="form-group"><label>FRT (hours)</label><input type="number" id="kpi-frt" min="0" step="0.1" placeholder="e.g. 11"></div>
+        <div class="form-group"><label>CSAT %</label><input type="number" id="kpi-csat" min="0" max="100" step="0.1" placeholder="e.g. 79"></div>
+        <div class="form-group"><label>CSAT Response Rate %</label><input type="number" id="kpi-csatRespRate" min="0" max="100" step="0.1" placeholder="e.g. 17"></div>
+      </div>
+    </div>
+    <div class="form-section">
+      <h3>🎯 Productivity</h3>
+      <div class="form-grid">
+        <div class="form-group"><label>TPH — CU Team</label><input type="number" id="kpi-tphCU" min="0" step="0.1" placeholder="e.g. 4.7"></div>
+        <div class="form-group"><label>TPH — BPO Team</label><input type="number" id="kpi-tphBPO" min="0" step="0.1" placeholder="e.g. 6.4"></div>
+      </div>
+    </div>
+    <div class="form-section">
+      <h3>👥 Headcount</h3>
+      <div class="form-grid">
+        <div class="form-group"><label>HC Needed</label><input type="number" id="kpi-hcNeeded" min="0" placeholder="e.g. 115"></div>
+        <div class="form-group"><label>HC Real</label><input type="number" id="kpi-hcReal" min="0" placeholder="e.g. 119"></div>
+        <div class="form-group"><label>PTO (agents out)</label><input type="number" id="kpi-pto" min="0" placeholder="e.g. 5"></div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="saveKPI()">Save KPIs</button>
+      <button class="btn btn-secondary" onclick="clearKPIForm()">Clear</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADMIN PAGE ── -->
+<div id="page-admin" class="page">
+  <div class="page-header"><h2>Admin</h2></div>
+  <div class="admin-grid">
+    <div class="card">
+      <h3>👥 Team Access</h3>
+      <div id="roles-list"></div>
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label>Email</label><input type="email" id="new-role-email" placeholder="user@cookunity.com" class="login-input" style="padding:8px 12px;border:2px solid var(--border);border-radius:7px;font-size:13px;outline:none"></div>
+          <div class="form-group"><label>Role</label>
+            <select id="new-role-type" style="padding:8px 12px;border:2px solid var(--border);border-radius:7px;font-size:13px;outline:none">
+              <option value="editor">Editor (can upload + log KPIs)</option>
+              <option value="viewer">Viewer (read-only)</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="addRole()">Add User</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>ℹ️ Setup Guide</h3>
+      <div style="font-size:13px;color:var(--mid);line-height:1.7">
+        <p><strong>1.</strong> Run <code>setupSheet()</code> in Apps Script to create all sheets.</p>
+        <p style="margin-top:8px"><strong>2.</strong> Deploy as Web App → copy the <code>/exec</code> URL → paste it below as DEFAULT_SCRIPT_URL.</p>
+        <p style="margin-top:8px"><strong>3.</strong> Upload your forecast CSV once (Upload page).</p>
+        <p style="margin-top:8px"><strong>4.</strong> Upload inbound &amp; solved CSVs daily.</p>
+        <p style="margin-top:8px"><strong>5.</strong> Log weekly KPIs (SLA, CSAT, TPH, HC) each week.</p>
+      </div>
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+        <label style="font-size:11px;font-weight:700;color:var(--mid);display:block;margin-bottom:4px">BACKEND URL (DEFAULT_SCRIPT_URL)</label>
+        <input type="text" id="script-url-input" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%;padding:8px 12px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none">
+        <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="updateScriptUrl()">Update & Reload</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<!-- TOAST -->
+<div id="toast" class="toast"></div>
+
+<script>
+'use strict';
+
+// ─── CONSTANTS ──────────────────────────────────────────────────────────────
+const DEFAULT_SCRIPT_URL  = 'https://script.google.com/macros/s/AKfycbzWdxKxSw0T_c0j9j2ClZN5BClnJpb3ikb0Xy48ECBzFryIvh3V0XmWDlUdw9AMye9jCQ/exec';
+const DEFAULT_ADMIN_EMAIL = 'cinthiavelez@cookunity.com';
+const USER_KEY   = 'cxdash_user';
+const URL_KEY    = 'cxdash_url';
+// Day-of-week distribution factors derived from 2025 historical data (Sun=0…Sat=6)
+const DOW = [0.099, 0.150, 0.168, 0.205, 0.160, 0.136, 0.082];
+// Default channel split (Live = 33.7%, Email = 66.3%)
+const CHAT_PCT  = 0.337;
+const EMAIL_PCT = 0.663;
+const MONTHS_FULL  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// ─── STATE ──────────────────────────────────────────────────────────────────
+let cachedData   = { forecasts:[], inbound:[], solved:[], inboundD:[], weeklyKPI:[], config:{} };
+let cachedRole   = 'viewer';
+let currentPage  = 'overview';
+let ovMode       = 'weekly';
+let trackerYear  = 2026;
+let trackerMonth = new Date().getMonth(); // 0-indexed
+let parsedFiles  = {}; // store parsed CSV data keyed by upload type
+
+// ─── AUTH ────────────────────────────────────────────────────────────────────
+function getUser()       { try { return JSON.parse(localStorage.getItem(USER_KEY)); } catch(e) { return null; } }
+function setUser(u)      { localStorage.setItem(USER_KEY, JSON.stringify(u)); }
+function scriptUrl()     { return localStorage.getItem(URL_KEY) || DEFAULT_SCRIPT_URL; }
+function setScriptUrl(u) { localStorage.setItem(URL_KEY, u); }
+
+function doLogin() {
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
+  if (!email || !email.includes('@')) { showToast('Enter a valid email address', '#EF4444'); return; }
+  setUser({ email });
+  document.getElementById('login-overlay').style.display = 'none';
+  initApp();
+}
+function doLogout() {
+  localStorage.removeItem(USER_KEY);
+  location.reload();
+}
+function isAdmin()  { return cachedRole === 'admin' || (getUser()?.email?.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase()); }
+
+// ─── API ─────────────────────────────────────────────────────────────────────
+async function apiFetch() {
+  setSyncStatus('syncing');
+  showLoading(true, 'Loading data…');
+  try {
+    const u = getUser();
+    const url = scriptUrl();
+    if (!url || url === 'YOUR_EXEC_URL_HERE') {
+      showToast('⚠️ Backend URL not configured. Go to Admin to set it.', '#F59E0B');
+      showLoading(false); setSyncStatus('err'); return;
+    }
+    const ep = u ? `${url}?email=${encodeURIComponent(u.email)}` : url;
+    const res = await fetch(ep, { redirect: 'follow' });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    cachedData.forecasts = data.forecasts  || [];
+    cachedData.inbound   = data.inbound    || [];
+    cachedData.solved    = data.solved     || [];
+    cachedData.inboundD  = data.inboundD   || [];
+    cachedData.weeklyKPI = data.weeklyKPI  || [];
+    cachedData.config    = data.config     || {};
+    cachedRole = data.role || 'viewer';
+    setSyncStatus('ok');
+  } catch(err) {
+    console.error('Fetch error:', err);
+    showToast('Could not load data: ' + err.message, '#EF4444');
+    setSyncStatus('err');
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function apiPost(body) {
+  const u = getUser();
+  const payload = { ...body, email: u?.email || '' };
+  const res = await fetch(scriptUrl(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload),
+    redirect: 'follow'
+  });
+  return await res.json();
+}
+
+// ─── NAVIGATION ──────────────────────────────────────────────────────────────
+const PAGES = ['overview','tracker','upload','kpi','admin'];
+
+async function navTo(page) {
+  currentPage = page;
+  PAGES.forEach(p => {
+    const el = document.getElementById('page-' + p);
+    if (el) el.classList.toggle('active', p === page);
+  });
+  document.querySelectorAll('.nav-btn[data-page]').forEach(b => {
+    b.classList.toggle('active', b.dataset.page === page);
+  });
+  if (page === 'overview')  renderOverview();
+  if (page === 'tracker')   renderTracker();
+  if (page === 'upload')    renderUpload();
+  if (page === 'kpi')       renderLogKPI();
+  if (page === 'admin')     renderAdmin();
+}
+
+// ─── DATA COMPUTATION ────────────────────────────────────────────────────────
+function getWeeklyData() {
+  const { forecasts, inbound, solved, weeklyKPI } = cachedData;
+  const fmap = {}, imap = {}, kmap = {}, svWeek = {};
+
+  forecasts.forEach(f => { fmap[fKey(f.week, f.weekStart)] = f; });
+  inbound.forEach(i => { imap[fKey(i.week, i.weekStart)] = i; });
+  weeklyKPI.forEach(k => { kmap[fKey(k.week, k.weekStart)] = k; });
+
+  // Aggregate daily solved → weekly
+  solved.forEach(s => {
+    const key = fKey(s.week, s.weekStart);
+    if (!svWeek[key]) svWeek[key] = { chatSolved:0, emailSolved:0, totalSolved:0 };
+    svWeek[key].chatSolved  += n(s.chatSolved);
+    svWeek[key].emailSolved += n(s.emailSolved);
+    svWeek[key].totalSolved += n(s.totalSolved);
+  });
+
+  const allKeys = new Set([...Object.keys(fmap), ...Object.keys(imap),
+    ...Object.keys(kmap), ...Object.keys(svWeek)]);
+
+  const rows = [];
+  allKeys.forEach(key => {
+    const parts = key.split('|');
+    const week = parseInt(parts[0]), weekStart = parts[1] || '';
+    if (!weekStart) return;
+    const f  = fmap[key]  || {};
+    const iv = imap[key]  || {};
+    const k  = kmap[key]  || {};
+    const sv = svWeek[key]|| {};
+    const totalFCST  = n(f.totalFCST);
+    const totalOnly  = n(iv.totalOnly);
+    const totalTotal = n(iv.totalTotal);
+    const totalSolvd = sv.totalSolved||0;
+    rows.push({
+      week, weekStart,
+      month       : f.month || k.month || monthFromDate(weekStart),
+      chatFCST    : n(f.chatFCST),  emailFCST   : n(f.emailFCST),  totalFCST,
+      chatOnly    : n(iv.chatOnly), emailOnly   : n(iv.emailOnly), totalOnly,
+      chatTotal   : n(iv.chatTotal),emailTotal  : n(iv.emailTotal),totalTotal,
+      chatSolved  : sv.chatSolved||0, emailSolved: sv.emailSolved||0, totalSolved: totalSolvd,
+      accOnly     : totalFCST ? totalOnly  / totalFCST * 100 : null,
+      accTotal    : totalFCST ? totalTotal / totalFCST * 100 : null,
+      solveRate   : totalOnly ? totalSolvd / totalOnly  * 100 : null,
+      sla         : n(k.sla)   || null, frt         : n(k.frt)        || null,
+      csat        : n(k.csat)  || null, csatRespRate: n(k.csatRespRate)|| null,
+      tphCU       : n(k.tphCU) || null, tphBPO      : n(k.tphBPO)     || null,
+      hcNeeded    : n(k.hcNeeded)||null,hcReal      : n(k.hcReal)      || null,
+      pto         : n(k.pto)   || null,
+    });
+  });
+  rows.sort((a,b) => (a.weekStart||'').localeCompare(b.weekStart||''));
+  return rows;
+}
+
+function fKey(week, weekStart) { return `${week}|${weekStart}`; }
+
+function getMonthlyData() {
+  const weeks = getWeeklyData();
+  const mmap = {};
+  weeks.forEach(w => {
+    const m = w.month || 'Unknown';
+    if (!mmap[m]) mmap[m] = {
+      month:m, chatFCST:0,emailFCST:0,totalFCST:0,
+      chatOnly:0,emailOnly:0,totalOnly:0,chatTotal:0,emailTotal:0,totalTotal:0,
+      chatSolved:0,emailSolved:0,totalSolved:0,
+      slaS:0,slaC:0,csatS:0,csatC:0,csatRS:0,csatRC:0,
+      frtS:0,frtC:0,tphCUS:0,tphCUC:0,tphBPOS:0,tphBPOC:0,
+      hcNS:0,hcNC:0,hcRS:0,hcRC:0
+    };
+    const r = mmap[m];
+    r.chatFCST+=w.chatFCST;r.emailFCST+=w.emailFCST;r.totalFCST+=w.totalFCST;
+    r.chatOnly+=w.chatOnly;r.emailOnly+=w.emailOnly;r.totalOnly+=w.totalOnly;
+    r.chatTotal+=w.chatTotal;r.emailTotal+=w.emailTotal;r.totalTotal+=w.totalTotal;
+    r.chatSolved+=w.chatSolved;r.emailSolved+=w.emailSolved;r.totalSolved+=w.totalSolved;
+    if(w.sla){r.slaS+=w.sla;r.slaC++}if(w.csat){r.csatS+=w.csat;r.csatC++}
+    if(w.csatRespRate){r.csatRS+=w.csatRespRate;r.csatRC++}
+    if(w.frt){r.frtS+=w.frt;r.frtC++}if(w.tphCU){r.tphCUS+=w.tphCU;r.tphCUC++}
+    if(w.tphBPO){r.tphBPOS+=w.tphBPO;r.tphBPOC++}
+    if(w.hcNeeded){r.hcNS+=w.hcNeeded;r.hcNC++}if(w.hcReal){r.hcRS+=w.hcReal;r.hcRC++}
+  });
+  return MONTHS_FULL.filter(m=>mmap[m]).map(m => {
+    const r = mmap[m];
+    return { ...r,
+      accOnly:   r.totalFCST ? r.totalOnly/r.totalFCST*100 : null,
+      accTotal:  r.totalFCST ? r.totalTotal/r.totalFCST*100 : null,
+      solveRate: r.totalOnly ? r.totalSolved/r.totalOnly*100 : null,
+      sla:r.slaC?r.slaS/r.slaC:null, csat:r.csatC?r.csatS/r.csatC:null,
+      csatRespRate:r.csatRC?r.csatRS/r.csatRC:null, frt:r.frtC?r.frtS/r.frtC:null,
+      tphCU:r.tphCUC?r.tphCUS/r.tphCUC:null, tphBPO:r.tphBPOC?r.tphBPOS/r.tphBPOC:null,
+      hcNeeded:r.hcNC?r.hcNS/r.hcNC:null, hcReal:r.hcRC?r.hcRS/r.hcRC:null,
+    };
+  });
+}
+
+function getQuarterlyData() {
+  const months = getMonthlyData();
+  const qDef = { Q1:['January','February','March'], Q2:['April','May','June'],
+                 Q3:['July','August','September'], Q4:['October','November','December'] };
+  return ['Q1','Q2','Q3','Q4'].map(q => {
+    const rows = months.filter(m => qDef[q].includes(m.month));
+    if (!rows.length) return null;
+    const agg = { quarter:q, chatFCST:0,emailFCST:0,totalFCST:0,
+      chatOnly:0,emailOnly:0,totalOnly:0,chatTotal:0,emailTotal:0,totalTotal:0,
+      chatSolved:0,emailSolved:0,totalSolved:0,
+      slaS:0,slaC:0,csatS:0,csatC:0 };
+    rows.forEach(r => {
+      agg.chatFCST+=r.chatFCST;agg.emailFCST+=r.emailFCST;agg.totalFCST+=r.totalFCST;
+      agg.chatOnly+=r.chatOnly;agg.emailOnly+=r.emailOnly;agg.totalOnly+=r.totalOnly;
+      agg.chatTotal+=r.chatTotal;agg.emailTotal+=r.emailTotal;agg.totalTotal+=r.totalTotal;
+      agg.chatSolved+=r.chatSolved;agg.emailSolved+=r.emailSolved;agg.totalSolved+=r.totalSolved;
+      if(r.sla){agg.slaS+=r.sla*(r.slaC||1);agg.slaC+=(r.slaC||1)}
+      if(r.csat){agg.csatS+=r.csat*(r.csatC||1);agg.csatC+=(r.csatC||1)}
+    });
+    return { ...agg,
+      accOnly:  agg.totalFCST?agg.totalOnly/agg.totalFCST*100:null,
+      accTotal: agg.totalFCST?agg.totalTotal/agg.totalFCST*100:null,
+      solveRate:agg.totalOnly?agg.totalSolved/agg.totalOnly*100:null,
+      sla:  agg.slaC ?agg.slaS/agg.slaC:null,
+      csat: agg.csatC?agg.csatS/agg.csatC:null,
+    };
+  }).filter(Boolean);
+}
+
+function getDailyData(year, month) {
+  const weeks = getWeeklyData();
+  const { inboundD } = cachedData;
+  const solvedMap = {}, inboundDMap = {};
+  cachedData.solved.forEach(s => { solvedMap[s.date] = s; });
+  inboundD.forEach(d => { inboundDMap[d.date] = d; });
+
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const allDays = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${pad(month+1)}-${pad(d)}`;
+    const date = new Date(year, month, d);
+    const dow  = date.getDay();
+    // Find the weekly forecast row that covers this date
+    const weekRow = weeks.find(w => {
+      const ws = new Date(w.weekStart+'T12:00:00');
+      const we = new Date(ws); we.setDate(ws.getDate()+6);
+      return date >= ws && date <= we;
+    });
+    const wFCST      = weekRow ? weekRow.totalFCST  : 0;
+    const wChatFCST  = weekRow ? weekRow.chatFCST   : 0;
+    const wEmailFCST = weekRow ? weekRow.emailFCST  : 0;
+    const dailyFCST      = wFCST      ? Math.round(wFCST      * DOW[dow]) : null;
+    const dailyChatFCST  = wChatFCST  ? Math.round(wChatFCST  * DOW[dow]) :
+                           (dailyFCST ? Math.round(dailyFCST * CHAT_PCT)  : null);
+    const dailyEmailFCST = wEmailFCST ? Math.round(wEmailFCST * DOW[dow]) :
+                           (dailyFCST ? Math.round(dailyFCST * EMAIL_PCT) : null);
+    const sv = solvedMap[dateStr]   || {};
+    const id = inboundDMap[dateStr] || {};
+    allDays.push({
+      date: dateStr, dow,
+      dayName: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow],
+      weekNum: weekRow ? weekRow.week : isoWeek(date),
+      weekStart: weekRow ? weekRow.weekStart : weekStartMon(date),
+      weekRow,
+      chatFCST: dailyChatFCST,   emailFCST: dailyEmailFCST,   totalFCST: dailyFCST,
+      chatSolved: sv.chatSolved  ? n(sv.chatSolved)  : null,
+      emailSolved:sv.emailSolved ? n(sv.emailSolved) : null,
+      totalSolved:sv.totalSolved ? n(sv.totalSolved) : null,
+      chatInb:  id.chatOnly  ? n(id.chatOnly)  : null,
+      emailInb: id.emailOnly ? n(id.emailOnly) : null,
+      totalInb: id.totalOnly ? n(id.totalOnly) : null,
+    });
+  }
+  // Group by week
+  const groups = [];
+  allDays.forEach(day => {
+    const last = groups[groups.length-1];
+    if (!last || last.weekNum !== day.weekNum) {
+      groups.push({ weekNum: day.weekNum, weekStart: day.weekStart, weekRow: day.weekRow, days:[] });
+    }
+    groups[groups.length-1].days.push(day);
+  });
+  return groups;
+}
+
+// ─── OVERVIEW RENDER ─────────────────────────────────────────────────────────
+function setOvMode(m) {
+  ovMode = m;
+  ['weekly','monthly','quarterly'].forEach(x => {
+    document.getElementById('tb-'+x).classList.toggle('active', x===m);
+  });
+  renderOverview();
+}
+
+function renderOverview() {
+  const tbl = document.getElementById('overview-table');
+  const summary = document.getElementById('overview-summary');
+  if (ovMode === 'weekly')    renderWeeklyTable(tbl, summary);
+  if (ovMode === 'monthly')   renderMonthlyTable(tbl, summary);
+  if (ovMode === 'quarterly') renderQuarterlyTable(tbl, summary);
+}
+
+const OV_COLS = [
+  { id:'totalFCST',   label:'Inbound FCST',    fmt:fmtN },
+  { id:'totalOnly',   label:'Only Inbound',     fmt:fmtN },
+  { id:'totalTotal',  label:'Inb+Out',          fmt:fmtN },
+  { id:'accOnly',     label:'Acc% (Only)',      fmt:fmtPct, color:colorAcc },
+  { id:'accTotal',    label:'Acc% (+Out)',      fmt:fmtPct, color:colorAcc },
+  { id:'totalSolved', label:'Solved Tix',       fmt:fmtN },
+  { id:'solveRate',   label:'Solve Rate%',      fmt:fmtPct, color:colorSolve },
+  { id:'sla',         label:'SLA%',             fmt:fmtPct, color:colorSLA },
+  { id:'frt',         label:'FRT',              fmt:(v)=>fmtN(v,1), color:colorFRT },
+  { id:'csat',        label:'CSAT%',            fmt:fmtPct, color:colorCSAT },
+  { id:'csatRespRate',label:'CSAT Resp%',       fmt:fmtPct },
+  { id:'tphCU',       label:'TPH CU',           fmt:(v)=>fmtN(v,1) },
+  { id:'tphBPO',      label:'TPH BPO',          fmt:(v)=>fmtN(v,1) },
+  { id:'hcNeeded',    label:'HC Need',          fmt:fmtN },
+  { id:'hcReal',      label:'HC Real',          fmt:fmtN },
+  { id:'pto',         label:'PTO',              fmt:fmtN },
+];
+
+function renderWeeklyTable(tbl, summary) {
+  const rows = getWeeklyData();
+  if (!rows.length) { tbl.innerHTML = emptyState('No data yet. Upload your forecast and inbound CSVs to get started.'); return; }
+
+  // Summary stats
+  const recent = rows.slice(-8);
+  const totFCST = recent.reduce((s,r)=>s+(r.totalFCST||0),0);
+  const totReal = recent.reduce((s,r)=>s+(r.totalOnly||0),0);
+  const avgSLA  = avg(recent.map(r=>r.sla).filter(Boolean));
+  const avgCSAT = avg(recent.map(r=>r.csat).filter(Boolean));
+  summary.innerHTML = `
+    <div class="stat"><div class="stat-val">${fmtN(totFCST)}</div><div class="stat-lbl">8-Wk FCST</div></div>
+    <div class="stat"><div class="stat-val">${fmtN(totReal)}</div><div class="stat-lbl">8-Wk Actual</div></div>
+    <div class="stat"><div class="stat-val">${totFCST?fmtPct(totReal/totFCST*100):'-'}</div><div class="stat-lbl">Avg Acc%</div></div>
+    <div class="stat"><div class="stat-val">${avgSLA?fmtPct(avgSLA):'-'}</div><div class="stat-lbl">Avg SLA</div></div>
+    <div class="stat"><div class="stat-val">${avgCSAT?fmtPct(avgCSAT):'-'}</div><div class="stat-lbl">Avg CSAT</div></div>`;
+
+  let thead = `<tr><th>Week</th><th>Week Start</th><th>Month</th>`;
+  OV_COLS.forEach(c => { thead += `<th>${c.label}</th>`; });
+  thead += '</tr>';
+  tbl.querySelector('thead').innerHTML = thead;
+
+  let tbody = '';
+  rows.forEach(r => {
+    tbody += `<tr><td>W${r.week}</td><td>${fmtDate(r.weekStart)}</td><td>${r.month||'-'}</td>`;
+    OV_COLS.forEach(c => {
+      const val = r[c.id];
+      const fmtd = (val !== null && val !== undefined) ? c.fmt(val) : '-';
+      const cls = (c.color && val !== null && val !== undefined) ? c.color(val) : '';
+      tbody += `<td class="${cls}">${fmtd}</td>`;
+    });
+    tbody += '</tr>';
+  });
+  tbl.querySelector('tbody').innerHTML = tbody;
+}
+
+function renderMonthlyTable(tbl, summary) {
+  const rows = getMonthlyData();
+  if (!rows.length) { tbl.innerHTML = emptyState('No monthly data yet.'); return; }
+  summary.innerHTML = '';
+  let thead = `<tr><th>Month</th>`;
+  OV_COLS.forEach(c => { thead += `<th>${c.label}</th>`; });
+  thead += '</tr>';
+  tbl.querySelector('thead').innerHTML = thead;
+  let tbody = '';
+  rows.forEach(r => {
+    tbody += `<tr><td>${r.month}</td>`;
+    OV_COLS.forEach(c => {
+      const val = r[c.id];
+      const fmtd = (val !== null && val !== undefined) ? c.fmt(val) : '-';
+      const cls = (c.color && val !== null && val !== undefined) ? c.color(val) : '';
+      tbody += `<td class="${cls}">${fmtd}</td>`;
+    });
+    tbody += '</tr>';
+  });
+  tbl.querySelector('tbody').innerHTML = tbody;
+}
+
+function renderQuarterlyTable(tbl, summary) {
+  const rows = getQuarterlyData();
+  if (!rows.length) { tbl.innerHTML = emptyState('No quarterly data yet.'); return; }
+  summary.innerHTML = '';
+  const QCOLS = OV_COLS.filter(c => !['tphBPO','hcNeeded','hcReal','pto'].includes(c.id));
+  let thead = `<tr><th>Quarter</th>`;
+  QCOLS.forEach(c => { thead += `<th>${c.label}</th>`; });
+  thead += '</tr>';
+  tbl.querySelector('thead').innerHTML = thead;
+  let tbody = '';
+  rows.forEach(r => {
+    tbody += `<tr><td>${r.quarter}</td>`;
+    QCOLS.forEach(c => {
+      const val = r[c.id];
+      const fmtd = (val !== null && val !== undefined) ? c.fmt(val) : '-';
+      const cls = (c.color && val !== null && val !== undefined) ? c.color(val) : '';
+      tbody += `<td class="${cls}">${fmtd}</td>`;
+    });
+    tbody += '</tr>';
+  });
+  tbl.querySelector('tbody').innerHTML = tbody;
+}
+
+// ─── DAILY TRACKER RENDER ─────────────────────────────────────────────────────
+function changeMonth(delta) {
+  trackerMonth += delta;
+  if (trackerMonth > 11) { trackerMonth = 0;  trackerYear++; }
+  if (trackerMonth < 0)  { trackerMonth = 11; trackerYear--; }
+  renderTracker();
+}
+
+function renderTracker() {
+  document.getElementById('tracker-month-label').textContent =
+    MONTHS_SHORT[trackerMonth] + ' ' + trackerYear;
+  const groups = getDailyData(trackerYear, trackerMonth);
+  const container = document.getElementById('tracker-content');
+  if (!groups.length) {
+    container.innerHTML = `<div class="empty-state"><p>No data for this month.</p><small>Upload solved tickets and forecast CSVs for ${MONTHS_FULL[trackerMonth]} ${trackerYear}.</small></div>`;
+    return;
+  }
+
+  const hasDailyInb = cachedData.inboundD.some(d => d.date && d.date.startsWith(`${trackerYear}-${pad(trackerMonth+1)}`));
+
+  let html = '';
+  groups.forEach(grp => {
+    const wr = grp.weekRow || {};
+    const wTotalFCST   = grp.days.reduce((s,d)=>s+(d.totalFCST||0),0);
+    const wTotalSolved = grp.days.reduce((s,d)=>s+(d.totalSolved||0),0);
+    const wTotalInb    = grp.days.reduce((s,d)=>s+(d.totalInb||0),0);
+    const wAcc = wTotalFCST ? (wTotalSolved/wTotalFCST*100) : null;
+    const wInbAcc = wTotalFCST && wTotalInb ? (wTotalInb/wTotalFCST*100) : null;
+
+    html += `<div class="week-block">
+      <div class="week-block-header">
+        <span class="wlbl">W${grp.weekNum}</span>
+        <span class="wk-stat">Week of <strong>${fmtDate(grp.weekStart)}</strong></span>
+        ${wTotalFCST ? `<span class="wk-stat">FCST: <strong>${fmtN(wTotalFCST)}</strong></span>` : ''}
+        ${wTotalSolved ? `<span class="wk-stat">Solved: <strong>${fmtN(wTotalSolved)}</strong></span>` : ''}
+        ${wAcc !== null ? `<span class="wk-stat">Solve/FCST: <strong>${fmtPct(wAcc)}</strong></span>` : ''}
+        ${wInbAcc !== null ? `<span class="wk-stat">Inb/FCST: <strong>${fmtPct(wInbAcc)}</strong></span>` : ''}
+        ${wr.sla    ? `<span class="wk-stat">SLA: <strong>${fmtPct(wr.sla)}</strong></span>`    : ''}
+        ${wr.csat   ? `<span class="wk-stat">CSAT: <strong>${fmtPct(wr.csat)}</strong></span>`   : ''}
+      </div>
+      <div class="table-wrapper" style="border-radius:0 0 8px 8px">
+      <table>
+        <thead><tr>
+          <th>Day</th><th>Date</th>
+          <th>Chat FCST</th>${hasDailyInb?'<th>Chat Real</th><th>Chat%</th>':''}
+          <th>Email FCST</th>${hasDailyInb?'<th>Email Real</th><th>Email%</th>':''}
+          <th>Total FCST</th>${hasDailyInb?'<th>Total Inb</th><th>Inb Acc%</th>':''}
+          <th>Chat Solved</th><th>Email Solved</th><th>Total Solved</th><th>Solve/FCST%</th>
+        </tr></thead>
+        <tbody>`;
+
+    grp.days.forEach(day => {
+      const isFuture = new Date(day.date) > new Date();
+      const solveAcc = day.totalFCST && day.totalSolved ? day.totalSolved/day.totalFCST*100 : null;
+      const inbAcc   = day.totalFCST && day.totalInb    ? day.totalInb/day.totalFCST*100    : null;
+      const chatAcc  = day.chatFCST  && day.chatInb     ? day.chatInb/day.chatFCST*100      : null;
+      const emailAcc = day.emailFCST && day.emailInb    ? day.emailInb/day.emailFCST*100    : null;
+      html += `<tr ${isFuture?'class="cell-dim"':''}>
+        <td style="font-weight:600">${day.dayName}</td>
+        <td>${day.date.slice(5)}</td>
+        <td>${fmtN(day.chatFCST)}</td>
+        ${hasDailyInb ? `<td>${fmtN(day.chatInb)}</td><td class="${colorAcc(chatAcc)}">${chatAcc?fmtPct(chatAcc):'-'}</td>` : ''}
+        <td>${fmtN(day.emailFCST)}</td>
+        ${hasDailyInb ? `<td>${fmtN(day.emailInb)}</td><td class="${colorAcc(emailAcc)}">${emailAcc?fmtPct(emailAcc):'-'}</td>` : ''}
+        <td>${fmtN(day.totalFCST)}</td>
+        ${hasDailyInb ? `<td>${fmtN(day.totalInb)}</td><td class="${colorAcc(inbAcc)}">${inbAcc?fmtPct(inbAcc):'-'}</td>` : ''}
+        <td>${fmtN(day.chatSolved)}</td>
+        <td>${fmtN(day.emailSolved)}</td>
+        <td style="font-weight:700">${fmtN(day.totalSolved)}</td>
+        <td class="${colorAcc(solveAcc)}">${solveAcc?fmtPct(solveAcc):'-'}</td>
+      </tr>`;
+    });
+
+    html += `</tbody></table></div></div>`;
+  });
+  container.innerHTML = html;
+}
+
+// ─── LOG KPIs ────────────────────────────────────────────────────────────────
+function renderLogKPI() {
+  const sel = document.getElementById('kpi-week-select');
+  const weeks = getWeeklyData();
+  const existing = sel.value;
+  sel.innerHTML = '<option value="">— choose a week —</option>';
+  // Build list from all weeks we have any data for, plus next 4 upcoming
+  const allWeeks = [...weeks];
+  // Add current + next 4 weeks if not already there
+  const today = new Date();
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(today); d.setDate(d.getDate() - d.getDay() + 1 + i*7);
+    const ws = d.toISOString().split('T')[0];
+    const wn = isoWeek(d);
+    if (!allWeeks.find(w => w.weekStart === ws)) {
+      allWeeks.push({ week:wn, weekStart:ws, month: monthFromDate(ws) });
+    }
+  }
+  allWeeks.sort((a,b)=>(a.weekStart||'').localeCompare(b.weekStart||''));
+  allWeeks.slice(-20).forEach(w => {
+    const opt = document.createElement('option');
+    opt.value = JSON.stringify({week:w.week,weekStart:w.weekStart,month:w.month});
+    opt.textContent = `W${w.week} — ${fmtDate(w.weekStart)} (${w.month||''})`;
+    sel.appendChild(opt);
+  });
+  if (existing) sel.value = existing;
+}
+
+function onKpiWeekChange() {
+  const val = document.getElementById('kpi-week-select').value;
+  const badge = document.getElementById('kpi-week-badge');
+  if (!val) { badge.style.display='none'; return; }
+  const { week, weekStart, month } = JSON.parse(val);
+  badge.style.display='inline-block';
+  badge.textContent = `W${week} · ${fmtDate(weekStart)} · ${month||''}`;
+  // Pre-fill if existing KPI data
+  const existing = cachedData.weeklyKPI.find(k => String(k.week)===String(week) && String(k.weekStart)===String(weekStart));
+  ['sla','frt','csat','csatRespRate','tphCU','tphBPO','hcNeeded','hcReal','pto'].forEach(f => {
+    const el = document.getElementById('kpi-'+f);
+    if (el) el.value = existing && existing[f] ? existing[f] : '';
+  });
+}
+
+async function saveKPI() {
+  const selVal = document.getElementById('kpi-week-select').value;
+  if (!selVal) { showToast('Please select a week first', '#F59E0B'); return; }
+  const { week, weekStart, month } = JSON.parse(selVal);
+  const get = id => { const el = document.getElementById('kpi-'+id); return el ? el.value : ''; };
+  const kpi = { week, weekStart, month,
+    sla:get('sla'), frt:get('frt'), csat:get('csat'), csatRespRate:get('csatRespRate'),
+    tphCU:get('tphCU'), tphBPO:get('tphBPO'), hcNeeded:get('hcNeeded'), hcReal:get('hcReal'), pto:get('pto') };
+  showLoading(true, 'Saving KPIs…');
+  try {
+    const res = await apiPost({ action:'saveWeeklyKPI', kpi });
+    if (res.error) throw new Error(res.error);
+    const banner = document.getElementById('kpi-success');
+    banner.style.display='block';
+    setTimeout(()=>{ banner.style.display='none'; },3000);
+    showToast(`✅ KPIs saved for W${week}`, '#10B981');
+    // Update cache
+    const idx = cachedData.weeklyKPI.findIndex(k=>String(k.week)===String(week)&&String(k.weekStart)===String(weekStart));
+    if (idx>=0) cachedData.weeklyKPI[idx] = { ...kpi, loggedBy: getUser()?.email||'' };
+    else cachedData.weeklyKPI.push({ ...kpi, loggedBy: getUser()?.email||'' });
+  } catch(err) {
+    showToast('Error: ' + err.message, '#EF4444');
+  } finally { showLoading(false); }
+}
+
+function clearKPIForm() {
+  ['sla','frt','csat','csatRespRate','tphCU','tphBPO','hcNeeded','hcReal','pto'].forEach(f => {
+    const el = document.getElementById('kpi-'+f); if(el) el.value='';
+  });
+}
+
+// ─── UPLOAD ──────────────────────────────────────────────────────────────────
+function renderUpload() {
+  // Restore existing admin URL if set
+  const urlInput = document.getElementById('script-url-input');
+  if (urlInput) urlInput.value = scriptUrl() || '';
+}
+
+function dragOver(e, zoneId) { e.preventDefault(); document.getElementById(zoneId).classList.add('drag'); }
+function dragLeave(zoneId)   { document.getElementById(zoneId).classList.remove('drag'); }
+
+function dropFile(e, type) {
+  e.preventDefault();
+  dragLeave('zone-'+type.replace('-',''));
+  const file = e.dataTransfer.files[0];
+  if (file) processUploadFile(file, type);
+}
+
+function fileChosen(e, type) {
+  const file = e.target.files[0];
+  if (file) processUploadFile(file, type);
+}
+
+function processUploadFile(file, type) {
+  const nameEl = document.getElementById('fname-'+type);
+  if (nameEl) nameEl.textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    let records = [];
+    const year = type === 'forecast' ? (parseInt(document.getElementById('fcst-year').value)||2026) : 2026;
+    if (type === 'only-inbound')    records = parseOnlyInboundCSV(text, year);
+    if (type === 'inbound-total')   records = parseInboundTotalCSV(text, year);
+    if (type === 'solved')          records = parseDailyChannelCSV(text, 'solved');
+    if (type === 'inbound-daily')   records = parseDailyChannelCSV(text, 'inbound');
+    if (type === 'forecast')        records = parseForecastCSV(text, year);
+    parsedFiles[type] = records;
+    const preview = document.getElementById('preview-'+type);
+    if (preview) {
+      preview.style.display = 'block';
+      preview.textContent = `✅ Parsed ${records.length} records. Ready to upload.`;
+      if (records.length === 0) preview.textContent = '⚠️ No records parsed. Check file format.';
+    }
+    const btn = document.getElementById('ubtn-'+type);
+    if (btn) btn.disabled = records.length === 0;
+  };
+  reader.readAsText(file);
+}
+
+function clearUpload(type) {
+  parsedFiles[type] = null;
+  const preview = document.getElementById('preview-'+type);
+  if (preview) { preview.style.display='none'; preview.textContent=''; }
+  const btn  = document.getElementById('ubtn-'+type); if(btn) btn.disabled=true;
+  const name = document.getElementById('fname-'+type); if(name) name.textContent='Choose file or drag here';
+  const fi   = document.getElementById('file-'+type.split('-')[0]);
+  if (fi) fi.value = '';
+}
+
+async function doUpload(type) {
+  const records = parsedFiles[type];
+  if (!records || !records.length) { showToast('No records to upload', '#F59E0B'); return; }
+  const actionMap = {
+    'only-inbound':   { action:'uploadInbound',  key:'records' },
+    'inbound-total':  { action:'uploadInbound',  key:'records' },
+    'solved':         { action:'uploadSolved',   key:'records' },
+    'inbound-daily':  { action:'uploadInboundD', key:'records' },
+    'forecast':       { action:'uploadForecast', key:'records' },
+  };
+  const { action } = actionMap[type];
+  showLoading(true, `Uploading ${records.length} records…`);
+  try {
+    const res = await apiPost({ action, records });
+    if (res.error) throw new Error(res.error);
+    showToast(`✅ Uploaded: ${res.added||0} added, ${res.updated||0} updated`, '#10B981');
+    clearUpload(type);
+    // Refresh data
+    await apiFetch();
+    if (currentPage === 'overview') renderOverview();
+    if (currentPage === 'tracker')  renderTracker();
+  } catch(err) {
+    showToast('Upload failed: ' + err.message, '#EF4444');
+  } finally { showLoading(false); }
+}
+
+// ─── CSV PARSERS ─────────────────────────────────────────────────────────────
+
+// Format 1: Only Inbound — wide format
+// Header: "Breakdown I", "Breakdown II", "15-Mar-26", "22-Mar-26", ...
+// Rows:  channel, "Total", val1, val2, ...
+function parseOnlyInboundCSV(text) {
+  const lines = parseCSV(text);
+  if (lines.length < 2) return [];
+  const header = lines[0];
+  const weekDates = header.slice(2).map(h => parseFlexDate(h.trim()));
+  const cdata = {};
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i];
+    const ch = (row[0]||'').trim().toLowerCase().replace(/\s+/g,'-');
+    if (!ch || row[1]?.trim().toLowerCase() !== 'total') continue;
+    cdata[ch] = row.slice(2).map(v => parseFloat(String(v).replace(/,/g,''))||0);
+  }
+  const results = [];
+  weekDates.forEach((dateStr, idx) => {
+    if (!dateStr) return;
+    const live  = (cdata['sms']?.[idx]||0) + (cdata['chat']?.[idx]||0);
+    const email = (cdata['email']?.[idx]||0) + (cdata['facebook']?.[idx]||0) +
+                  (cdata['instagram']?.[idx]||0) + (cdata['twitter-dm']?.[idx]||0) +
+                  (cdata['twitter_direct_message']?.[idx]||0);
+    const total = live + email;
+    if (!total) return;
+    const d = new Date(dateStr+'T12:00:00');
+    results.push({ week: isoWeek(d), weekStart: weekStartMon(d),
+      chatOnly:live, emailOnly:email, totalOnly:total,
+      chatTotal:'', emailTotal:'', totalTotal:'' });
+  });
+  return results;
+}
+
+// Format 2: Inbound + Outbound — long format
+// Cols: "Ticket channel", "Ticket created - Week of Year", "Tickets", "Exclude closed..."
+function parseInboundTotalCSV(text, year=2026) {
+  const lines = parseCSV(text);
+  if (lines.length < 2) return [];
+  const header = lines[0].map(h=>(h||'').trim().toLowerCase());
+  const weekIdx = header.findIndex(h=>h.includes('week'));
+  const tixIdx  = header.findIndex(h=>h==='tickets');
+  if (weekIdx < 0 || tixIdx < 0) return [];
+  const wdata = {};
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i];
+    const ch  = (row[0]||'').trim();
+    const wk  = parseInt(row[weekIdx]);
+    const tix = parseFloat(row[tixIdx])||0;
+    if (!ch || !wk || ch.toLowerCase()==='sum') continue;
+    if (!wdata[wk]) wdata[wk] = {};
+    wdata[wk][ch] = (wdata[wk][ch]||0) + tix;
+  }
+  const results = [];
+  Object.entries(wdata).forEach(([wk, channels]) => {
+    const live  = (channels['Twilio SMS']||0) + (channels['Messaging']||0);
+    const email = Object.entries(channels).filter(([c])=>c!=='Twilio SMS'&&c!=='Messaging')
+      .reduce((s,[,v])=>s+v,0);
+    const total = live + email;
+    const d = isoWeekToMon(year, parseInt(wk));
+    const ws = d.toISOString().split('T')[0];
+    results.push({ week:parseInt(wk), weekStart:ws,
+      chatOnly:'', emailOnly:'', totalOnly:'',
+      chatTotal:live, emailTotal:email, totalTotal:total });
+  });
+  results.sort((a,b)=>a.week-b.week);
+  return results;
+}
+
+// Format 3 & 4: Daily channel CSV (solved tickets OR inbound daily)
+// Cols: "Ticket channel", "Ticket solved/created - Date", value
+function parseDailyChannelCSV(text, mode='solved') {
+  const lines = parseCSV(text);
+  if (lines.length < 2) return [];
+  const ddata = {};
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i];
+    const ch   = (row[0]||'').trim();
+    const date = (row[1]||'').trim();
+    const val  = parseFloat(row[2])||0;
+    if (!ch || !date || !date.match(/^\d{4}-\d{2}-\d{2}$/) || ch.toLowerCase()==='sum') continue;
+    if (!ddata[date]) ddata[date] = {};
+    ddata[date][ch] = (ddata[date][ch]||0) + val;
+  }
+  const results = [];
+  Object.entries(ddata).forEach(([date, channels]) => {
+    const live  = (channels['Twilio SMS']||0) + (channels['Messaging']||0);
+    const email = Object.entries(channels).filter(([c])=>c!=='Twilio SMS'&&c!=='Messaging')
+      .reduce((s,[,v])=>s+v,0);
+    const total = live + email;
+    const d = new Date(date+'T12:00:00');
+    const ws = weekStartMon(d);
+    if (mode==='solved') {
+      results.push({ date, week:isoWeek(d), weekStart:ws,
+        chatSolved:live, emailSolved:email, totalSolved:total });
+    } else {
+      results.push({ date, week:isoWeek(d), weekStart:ws,
+        chatOnly:live, emailOnly:email, totalOnly:total,
+        chatTotal:'', emailTotal:'', totalTotal:'' });
+    }
+  });
+  results.sort((a,b)=>a.date.localeCompare(b.date));
+  return results;
+}
+
+// Format 5: Weekly & Daily Forecast CSV
+// Cols: Week, Date, SMS, Chat, SoMe, Email — use "X Total" rows
+function parseForecastCSV(text, year=2026) {
+  const lines = parseCSV(text);
+  if (lines.length < 2) return [];
+  const results = [];
+  let currentWk = null, firstDate = null;
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i];
+    const wCol = String(row[0]||'').trim();
+    const dCol = String(row[1]||'').trim();
+    if (wCol.toLowerCase().includes('grand')) continue;
+    if (wCol.toLowerCase().includes('total') || (wCol && !isNaN(wCol) && dCol==='')) {
+      // Weekly total row
+      const sms=parseFloat(String(row[2]||'').replace(/,/g,''))||0;
+      const chat=parseFloat(String(row[3]||'').replace(/,/g,''))||0;
+      const soMe=parseFloat(String(row[4]||'').replace(/,/g,''))||0;
+      const email=parseFloat(String(row[5]||'').replace(/,/g,''))||0;
+      if (currentWk !== null && firstDate) {
+        let fd = parseFlexDate(firstDate);
+        if (fd) {
+          // Adjust year
+          const orig = new Date(fd+'T12:00:00');
+          const adj  = new Date(year, orig.getMonth(), orig.getDate());
+          const ws   = weekStartMon(adj);
+          const chatFCST  = sms + chat;
+          const emailFCST = soMe + email;
+          results.push({ week:isoWeek(adj), weekStart:ws,
+            month: monthFromDate(ws), chatFCST, emailFCST, totalFCST:chatFCST+emailFCST });
+        }
+      }
+      currentWk = null; firstDate = null;
+    } else if (wCol && !isNaN(parseInt(wCol))) {
+      currentWk = parseInt(wCol); firstDate = dCol || null;
+    } else if (!wCol && dCol && !firstDate) {
+      firstDate = dCol;
+    }
+  }
+  return results;
+}
+
+// Generic CSV parser (handles quoted fields with commas)
+function parseCSV(text) {
+  const lines = []; let cur = [], field = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c==='"') { if(inQ&&text[i+1]==='"'){field+='"';i++;}else{inQ=!inQ;} }
+    else if (c===',' && !inQ) { cur.push(field.trim()); field=''; }
+    else if ((c==='\n'||c==='\r') && !inQ) {
+      if (c==='\r'&&text[i+1]==='\n') i++;
+      cur.push(field.trim());
+      if (cur.some(f=>f)) lines.push(cur);
+      cur=[]; field='';
+    } else { field+=c; }
+  }
+  cur.push(field.trim());
+  if (cur.some(f=>f)) lines.push(cur);
+  return lines;
+}
+
+// Parse "15-Mar-26" or "6/1/2025" → "YYYY-MM-DD"
+function parseFlexDate(str) {
+  if (!str) return null;
+  str = str.trim().replace(/﻿/g,'');
+  const m1 = str.match(/^(\d{1,2})[\/\-]([A-Za-z]{3})[\/\-](\d{2,4})$/);
+  if (m1) {
+    const MON={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+    const mo = MON[m1[2].toLowerCase()];
+    const yr = parseInt(m1[3]) < 100 ? 2000+parseInt(m1[3]) : parseInt(m1[3]);
+    if (mo) return `${yr}-${pad(mo)}-${pad(parseInt(m1[1]))}`;
+  }
+  const m2 = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m2) {
+    const yr = parseInt(m2[3]) < 100 ? 2000+parseInt(m2[3]) : parseInt(m2[3]);
+    return `${yr}-${pad(parseInt(m2[1]))}-${pad(parseInt(m2[2]))}`;
+  }
+  if (str.match(/^\d{4}-\d{2}-\d{2}$/)) return str;
+  return null;
+}
+
+// ─── ADMIN ────────────────────────────────────────────────────────────────────
+function renderAdmin() {
+  if (document.getElementById('script-url-input'))
+    document.getElementById('script-url-input').value = scriptUrl() || '';
+  renderRolesList();
+}
+
+function renderRolesList() {
+  const el = document.getElementById('roles-list');
+  const roles = [{ email: DEFAULT_ADMIN_EMAIL, role:'admin', assignedBy:'-', assignedDate:'Built-in' }];
+  // This is a static view; real roles load from backend on next fetch
+  const addlRows = (cachedData.weeklyKPI.map(k=>k.loggedBy).filter(Boolean)
+    .map(e => ({ email:e, role:'editor', assignedBy:'—', assignedDate:'—' })));
+  // Unique
+  const seen = new Set([DEFAULT_ADMIN_EMAIL]);
+  addlRows.forEach(r => { if(!seen.has(r.email)){seen.add(r.email);roles.push(r);} });
+  el.innerHTML = `<table class="roles-table">
+    <thead><tr><th>Email</th><th>Role</th><th>Action</th></tr></thead>
+    <tbody>${roles.map(r => `<tr>
+      <td>${r.email}</td>
+      <td><span class="role-badge role-${r.role}">${r.role}</span></td>
+      <td>${r.role==='admin'?'—':`<button class="btn btn-secondary btn-sm" onclick="removeRole('${r.email}')">Remove</button>`}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+async function addRole() {
+  const email = document.getElementById('new-role-email').value.trim().toLowerCase();
+  const role  = document.getElementById('new-role-type').value;
+  if (!email) { showToast('Enter an email', '#F59E0B'); return; }
+  showLoading(true, 'Adding user…');
+  try {
+    const res = await apiPost({ action:'updateRoles', subAction:'add', targetEmail:email, role });
+    if (res.error) throw new Error(res.error);
+    showToast(`✅ ${email} added as ${role}`, '#10B981');
+    document.getElementById('new-role-email').value='';
+  } catch(err) { showToast('Error: '+err.message,'#EF4444'); }
+  finally { showLoading(false); }
+}
+
+async function removeRole(email) {
+  if (!confirm(`Remove ${email}?`)) return;
+  const res = await apiPost({ action:'updateRoles', subAction:'remove', targetEmail:email });
+  if (res.error) { showToast('Error: '+res.error,'#EF4444'); return; }
+  showToast('Removed', '#10B981');
+}
+
+function updateScriptUrl() {
+  const url = document.getElementById('script-url-input').value.trim();
+  if (!url) return;
+  setScriptUrl(url);
+  showToast('Backend URL updated. Reloading data…', '#10B981');
+  setTimeout(() => apiFetch().then(() => navTo(currentPage)), 500);
+}
+
+// ─── UTILITIES ───────────────────────────────────────────────────────────────
+
+// ISO week number
+function isoWeek(d) {
+  const date = new Date(+d); date.setHours(12,0,0,0);
+  date.setDate(date.getDate() + 3 - (date.getDay()+6)%7);
+  const w1 = new Date(date.getFullYear(),0,4);
+  return 1 + Math.round(((date-w1)/86400000 - 3 + (w1.getDay()+6)%7)/7);
+}
+
+// Get Monday of the ISO week for a date
+function weekStartMon(d) {
+  const date = typeof d === 'string' ? new Date(d+'T12:00:00') : new Date(+d);
+  date.setHours(12,0,0,0);
+  const day = date.getDay();
+  const diff = day===0 ? -6 : 1-day;
+  date.setDate(date.getDate()+diff);
+  return date;
+}
+function weekStartMonStr(d) { return weekStartMon(d).toISOString().split('T')[0]; }
+
+// Get the Monday of ISO week wk in year yr
+function isoWeekToMon(yr, wk) {
+  const jan4 = new Date(yr,0,4,12);
+  const day  = jan4.getDay();
+  const wk1Mon = new Date(jan4);
+  wk1Mon.setDate(jan4.getDate() - (day===0?6:day-1));
+  const result = new Date(wk1Mon);
+  result.setDate(wk1Mon.getDate() + (wk-1)*7);
+  return result;
+}
+
+function monthFromDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr+'T12:00:00');
+  return isNaN(d) ? '' : MONTHS_FULL[d.getMonth()];
+}
+function fmtDate(dateStr) {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr+'T12:00:00');
+  if (isNaN(d)) return dateStr;
+  return `${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+}
+function n(v)    { const f=parseFloat(v); return isNaN(f)?0:f; }
+function pad(v)  { return String(v).padStart(2,'0'); }
+function avg(arr){ return arr.length ? arr.reduce((s,v)=>s+v,0)/arr.length : null; }
+
+// Formatters
+function fmtN(v, dec=0) {
+  if (v===null||v===undefined||v==='') return '-';
+  const f = parseFloat(v); if(isNaN(f)) return '-';
+  return f.toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec});
+}
+function fmtPct(v, dec=1) {
+  if (v===null||v===undefined||v==='') return '-';
+  const f = parseFloat(v); if(isNaN(f)) return '-';
+  return f.toFixed(dec)+'%';
+}
+
+// Color functions
+function colorAcc(v)   {
+  if(!v) return '';
+  if(v>=90&&v<=110) return 'cell-green';
+  if((v>=80&&v<90)||(v>110&&v<=125)) return 'cell-yellow';
+  if(v>125) return 'cell-orange';
+  return 'cell-red';
+}
+function colorSLA(v)   { if(!v) return ''; return v>=90?'cell-green':v>=80?'cell-yellow':'cell-red'; }
+function colorCSAT(v)  { if(!v) return ''; return v>=80?'cell-green':v>=75?'cell-yellow':'cell-red'; }
+function colorSolve(v) { if(!v) return ''; return v>=98?'cell-green':v>=90?'cell-yellow':'cell-red'; }
+function colorFRT(v)   { if(!v) return ''; return v<=11?'cell-green':v<=15?'cell-yellow':'cell-red'; }
+
+function emptyState(msg) {
+  return `<tr><td colspan="99"><div class="empty-state"><p>${msg}</p></div></td></tr>`;
+}
+
+// ─── UI HELPERS ──────────────────────────────────────────────────────────────
+function showLoading(show, msg='Loading…') {
+  const el = document.getElementById('loading');
+  const ml = document.getElementById('loading-msg');
+  el.style.display = show ? 'flex' : 'none';
+  if (ml) ml.textContent = msg;
+}
+function setSyncStatus(s) {
+  const d = document.getElementById('sync-dot');
+  if (!d) return;
+  d.className = 'sync-dot ' + s;
+}
+function showToast(msg, color='#10B981') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.background = color;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3500);
+}
+
+// ─── BOOT ────────────────────────────────────────────────────────────────────
+async function initApp() {
+  const u = getUser();
+  if (!u) { document.getElementById('login-overlay').style.display='flex'; return; }
+  document.getElementById('login-overlay').style.display='none';
+  document.getElementById('nav-email').textContent = u.email;
+  // Show admin button immediately for the default admin
+  if (u.email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase()) {
+    document.getElementById('btn-admin').style.display='';
+  }
+  await apiFetch();
+  // Refresh admin button after role is known
+  if (isAdmin()) document.getElementById('btn-admin').style.display='';
+  navTo('overview');
+  // Auto-refresh every 3 minutes
+  setInterval(async () => {
+    await apiFetch();
+    navTo(currentPage);
+  }, 180000);
+}
+
+(function boot() { initApp(); })();
+</script>
+</body>
+</html>
