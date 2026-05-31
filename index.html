@@ -8,12 +8,22 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --brand:#E85D04;--brand2:#F97316;--dark:#1E293B;--mid:#475569;--light:#94A3B8;
-  --bg:#F1F5F9;--card:#fff;--border:#E2E8F0;
-  --green-bg:#D1FAE5;--green-tx:#065F46;
-  --yellow-bg:#FEF3C7;--yellow-tx:#92400E;
+  /* CookUnity Brand Colors */
+  --ranch:#FF6A14;      /* primary orange */
+  --yellow:#FFB81C;     /* warm yellow */
+  --charcoal:#24272A;   /* dark nav/text */
+  --magenta:#AA0061;    /* accent */
+  --sea:#475CC7;        /* blue */
+  --earth:#218848;      /* green */
+  --breakfast:#B8CDC2;  /* soft teal-grey */
+  --specials:#B3A369;   /* gold */
+
+  --brand:#FF6A14;--brand2:#FFB81C;--dark:#24272A;--mid:#64748B;--light:#94A3B8;
+  --bg:#F5F6F7;--card:#fff;--border:#E2E8F0;
+  --green-bg:#D1FAE5;--green-tx:#218848;
+  --yellow-bg:#FFF8E1;--yellow-tx:#7A5200;
   --red-bg:#FEE2E2;--red-tx:#991B1B;
-  --orange-bg:#FFEDD5;--orange-tx:#9A3412;
+  --orange-bg:#FFF0E6;--orange-tx:#C24400;
 }
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--dark);font-size:14px}
 
@@ -24,18 +34,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .loading-msg{margin-top:12px;color:var(--mid);font-weight:600}
 
 /* ── LOGIN ── */
-.login-overlay{position:fixed;inset:0;background:linear-gradient(135deg,#1E293B 0%,#E85D04 100%);display:flex;align-items:center;justify-content:center;z-index:9999}
+.login-overlay{position:fixed;inset:0;background:linear-gradient(135deg,#24272A 0%,#AA0061 50%,#FF6A14 100%);display:flex;align-items:center;justify-content:center;z-index:9999}
 .login-card{background:#fff;border-radius:16px;padding:40px;width:360px;box-shadow:0 25px 50px rgba(0,0,0,.3);text-align:center}
 .login-logo{font-size:48px;margin-bottom:12px}
 .login-card h1{font-size:22px;color:var(--dark);margin-bottom:4px}
 .login-card p{color:var(--mid);margin-bottom:24px;font-size:13px}
 .login-input{width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:8px;font-size:14px;outline:none;transition:border-color .2s}
 .login-input:focus{border-color:var(--brand)}
-.login-btn{width:100%;margin-top:12px;padding:12px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .2s}
+.login-btn{width:100%;margin-top:12px;padding:12px;background:linear-gradient(135deg,#AA0061,#FF6A14);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:opacity .2s}
 .login-btn:hover{opacity:.9}
 
 /* ── NAV ── */
-.navbar{background:linear-gradient(135deg,#1E293B 0%,#E85D04 100%);padding:0 20px;display:flex;align-items:center;gap:8px;min-height:52px;position:sticky;top:0;z-index:100;flex-wrap:wrap}
+.navbar{background:linear-gradient(135deg,#24272A 0%,#AA0061 50%,#FF6A14 100%);padding:0 20px;display:flex;align-items:center;gap:8px;min-height:52px;position:sticky;top:0;z-index:100;flex-wrap:wrap}
 .nav-brand{color:#fff;font-weight:800;font-size:16px;margin-right:8px;white-space:nowrap}
 .nav-brand span{opacity:.6;font-size:12px;font-weight:400}
 .nav-links{display:flex;gap:4px;flex:1;flex-wrap:wrap}
@@ -70,9 +80,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* ── TABLES ── */
 .table-wrapper{overflow-x:auto;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
 table{border-collapse:collapse;width:100%;background:#fff;font-size:12.5px}
-thead th{background:#1E293B;color:#fff;padding:8px 10px;white-space:nowrap;font-weight:600;font-size:11.5px;letter-spacing:.3px;text-align:center;position:sticky;top:0;z-index:10}
+thead th{background:#24272A;color:#fff;padding:8px 10px;white-space:nowrap;font-weight:600;font-size:11.5px;letter-spacing:.3px;text-align:center;position:sticky;top:0;z-index:10}
 thead th:first-child{position:sticky;left:0;z-index:20}
-thead th.group-header{background:#374151;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:#94A3B8}
+thead th.group-header{background:#3a3d40;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:#94A3B8}
 tbody tr:nth-child(even){background:#F8FAFC}
 tbody tr:hover{background:#EFF6FF}
 tbody td{padding:7px 10px;white-space:nowrap;border-bottom:1px solid var(--border);text-align:center;color:var(--dark)}
@@ -82,8 +92,8 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
 .cell-red{background:var(--red-bg)!important;color:var(--red-tx)!important;font-weight:600}
 .cell-orange{background:var(--orange-bg)!important;color:var(--orange-tx)!important;font-weight:600}
 .cell-dim{color:var(--light)!important}
-.week-summary-row td{background:#E0F2FE!important;font-weight:700!important;font-size:12px}
-.week-summary-row td:first-child{background:#0284C7!important;color:#fff!important}
+.week-summary-row td{background:#FFF0E6!important;font-weight:700!important;font-size:12px}
+.week-summary-row td:first-child{background:#FF6A14!important;color:#fff!important}
 .empty-state{text-align:center;padding:48px 20px;color:var(--mid)}
 .empty-state p{font-size:15px;margin-bottom:8px}
 .empty-state small{font-size:12px}
@@ -102,7 +112,7 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
 .upload-preview{margin-top:12px;background:#F8FAFC;border-radius:6px;padding:10px;font-size:11px;color:var(--mid);max-height:100px;overflow-y:auto}
 .upload-actions{display:flex;gap:8px;margin-top:12px}
 .btn{padding:8px 18px;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s}
-.btn-primary{background:var(--brand);color:#fff}.btn-primary:hover{background:#C2410C}
+.btn-primary{background:var(--brand);color:#fff}.btn-primary:hover{background:#D95200}
 .btn-secondary{background:var(--border);color:var(--dark)}.btn-secondary:hover{background:#CBD5E1}
 .btn-sm{padding:5px 12px;font-size:12px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
@@ -124,7 +134,7 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
 .success-banner{background:var(--green-bg);color:var(--green-tx);padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:12px;display:none}
 
 /* ── TRACKER ── */
-.tracker-header{background:linear-gradient(135deg,#1E293B,#E85D04);color:#fff;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.tracker-header{background:linear-gradient(135deg,#24272A,#AA0061,#FF6A14);color:#fff;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .tracker-header h3{font-size:16px;font-weight:700}
 .tracker-kpi-bar{display:flex;gap:20px;flex-wrap:wrap}
 .tracker-kpi{text-align:center}
@@ -135,7 +145,7 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
 .month-nav button:hover{background:rgba(255,255,255,.3)}
 #tracker-month-label{font-size:15px;font-weight:700;min-width:100px;text-align:center}
 .week-block{margin-bottom:12px}
-.week-block-header{background:#334155;color:#fff;padding:8px 12px;border-radius:6px 6px 0 0;display:flex;align-items:center;gap:16px;font-size:12px;font-weight:600}
+.week-block-header{background:#24272A;color:#fff;padding:8px 12px;border-radius:6px 6px 0 0;display:flex;align-items:center;gap:16px;font-size:12px;font-weight:600}
 .week-block-header .wlbl{font-size:13px;font-weight:800;margin-right:8px}
 .wk-stat{opacity:.85}
 .wk-stat strong{color:#fff}
@@ -147,8 +157,8 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
 .roles-table th{background:var(--bg);padding:8px 12px;text-align:left;font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.4px}
 .roles-table td{padding:8px 12px;border-bottom:1px solid var(--border)}
 .role-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700}
-.role-admin{background:#EDE9FE;color:#5B21B6}
-.role-editor{background:#DBEAFE;color:#1D4ED8}
+.role-admin{background:#F5E6EF;color:#AA0061}
+.role-editor{background:#E8ECFB;color:#475CC7}
 .role-viewer{background:var(--bg);color:var(--mid)}
 
 /* ── TOAST ── */
@@ -183,6 +193,8 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <button class="nav-btn" data-page="tracker" onclick="navTo('tracker')">📅 Daily Tracker</button>
     <button class="nav-btn" data-page="upload" onclick="navTo('upload')">⬆️ Upload Data</button>
     <button class="nav-btn" data-page="kpi" onclick="navTo('kpi')">✏️ Log KPIs</button>
+    <button class="nav-btn" data-page="cr"    onclick="navTo('cr')">📋 Contact Reason</button>
+    <button class="nav-btn" data-page="subcr" onclick="navTo('subcr')">🔍 Sub CR</button>
     <button class="nav-btn" id="btn-admin" data-page="admin" onclick="navTo('admin')" style="display:none">⚙️ Admin</button>
   </div>
   <div class="nav-right">
@@ -308,14 +320,14 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
       </div>
     </div>
 
-    <!-- Weekly & Daily Forecast -->
+    <!-- Weekly Forecast -->
     <div class="upload-card">
       <div class="format-badge">FORECAST · WEEKLY</div>
-      <h3>🎯 Weekly &amp; Daily Forecast</h3>
-      <p>CSV with Week, Date, SMS, Chat, SoMe, Email columns — uses the weekly total rows.<br>
+      <h3>🎯 Weekly Forecast</h3>
+      <p>CSV with Week, Date, SMS, Chat, SoMe, Email columns — extracts the weekly total rows.<br>
          <em>Inbound and HC - 2026 - Weekly &amp; Daily Forecast.csv</em></p>
       <div style="margin-bottom:10px">
-        <label style="font-size:11px;font-weight:700;color:var(--mid);display:block;margin-bottom:4px">TARGET YEAR (if CSV dates are from a prior year)</label>
+        <label style="font-size:11px;font-weight:700;color:var(--mid);display:block;margin-bottom:4px">TARGET YEAR</label>
         <input type="number" id="fcst-year" value="2026" style="width:100px;padding:6px 10px;border:2px solid var(--border);border-radius:6px;font-size:13px">
       </div>
       <div class="upload-zone" id="zone-forecast" ondragover="dragOver(event,'zone-forecast')" ondragleave="dragLeave('zone-forecast')" ondrop="dropFile(event,'forecast')">
@@ -328,6 +340,29 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
       <div class="upload-actions">
         <button class="btn btn-primary" id="ubtn-forecast" onclick="doUpload('forecast')" disabled>Upload</button>
         <button class="btn btn-secondary btn-sm" onclick="clearUpload('forecast')">Clear</button>
+      </div>
+    </div>
+
+    <!-- Daily Forecast -->
+    <div class="upload-card highlight">
+      <div class="format-badge">FORECAST · DAILY</div>
+      <h3>📆 Daily Forecast</h3>
+      <p>Same CSV — extracts each individual day row for use in the Daily Tracker.<br>
+         <em>Inbound and HC - 2026 - Weekly &amp; Daily Forecast.csv</em></p>
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:700;color:var(--mid);display:block;margin-bottom:4px">TARGET YEAR</label>
+        <input type="number" id="fcst-daily-year" value="2026" style="width:100px;padding:6px 10px;border:2px solid var(--border);border-radius:6px;font-size:13px">
+      </div>
+      <div class="upload-zone" id="zone-forecast-daily" ondragover="dragOver(event,'zone-forecast-daily')" ondragleave="dragLeave('zone-forecast-daily')" ondrop="dropFile(event,'forecast-daily')">
+        <input type="file" accept=".csv" id="file-forecastdaily" onchange="fileChosen(event,'forecast-daily')">
+        <div class="uf-icon">📂</div>
+        <strong id="fname-forecast-daily">Choose file or drag here</strong>
+        <p>Inbound and HC - 2026 - Weekly &amp; Daily Forecast.csv</p>
+      </div>
+      <div id="preview-forecast-daily" class="upload-preview" style="display:none"></div>
+      <div class="upload-actions">
+        <button class="btn btn-primary" id="ubtn-forecast-daily" onclick="doUpload('forecast-daily')" disabled>Upload</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearUpload('forecast-daily')">Clear</button>
       </div>
     </div>
 
@@ -434,6 +469,63 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
   </div>
 </div>
 
+<!-- ── CONTACT REASON PAGE ── -->
+<div id="page-cr" class="page">
+  <div class="page-header">
+    <h2>Contact Reason</h2>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--mid)">Last 8 weeks · Sun–Sat</span>
+    </div>
+  </div>
+  <div id="cr-upload-inline" class="card" style="margin-bottom:16px">
+    <h3>⬆️ Upload Contact Reason CSV</h3>
+    <p style="font-size:12px;color:var(--mid);margin-bottom:12px">Wide-format CSV — <em>Contact Reason.csv</em> — upload weekly every Sunday.</p>
+    <div class="upload-zone" id="zone-cr" ondragover="dragOver(event,'zone-cr')" ondragleave="dragLeave('zone-cr')" ondrop="dropFile(event,'cr')">
+      <input type="file" accept=".csv" id="file-cr" onchange="fileChosen(event,'cr')">
+      <div class="uf-icon">📂</div>
+      <strong id="fname-cr">Choose file or drag here</strong>
+    </div>
+    <div id="preview-cr" class="upload-preview" style="display:none"></div>
+    <div class="upload-actions">
+      <button class="btn btn-primary" id="ubtn-cr" onclick="doUpload('cr')" disabled>Upload</button>
+      <button class="btn btn-secondary btn-sm" onclick="clearUpload('cr')">Clear</button>
+    </div>
+  </div>
+  <div class="table-wrapper">
+    <table id="cr-table"><thead></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<!-- ── SUB CONTACT REASON PAGE ── -->
+<div id="page-subcr" class="page">
+  <div class="page-header">
+    <h2>Sub Contact Reason</h2>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <label style="font-size:12px;font-weight:700;color:var(--mid)">Filter:</label>
+      <select id="subcr-filter" onchange="renderSubCR()" style="padding:6px 10px;border:2px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+        <option value="">— All Parent Reasons —</option>
+      </select>
+    </div>
+  </div>
+  <div id="subcr-upload-inline" class="card" style="margin-bottom:16px">
+    <h3>⬆️ Upload Sub Contact Reason CSV</h3>
+    <p style="font-size:12px;color:var(--mid);margin-bottom:12px">Wide-format CSV — <em>Sub CR.csv</em> — upload weekly every Sunday.</p>
+    <div class="upload-zone" id="zone-subcr" ondragover="dragOver(event,'zone-subcr')" ondragleave="dragLeave('zone-subcr')" ondrop="dropFile(event,'subcr')">
+      <input type="file" accept=".csv" id="file-subcr" onchange="fileChosen(event,'subcr')">
+      <div class="uf-icon">📂</div>
+      <strong id="fname-subcr">Choose file or drag here</strong>
+    </div>
+    <div id="preview-subcr" class="upload-preview" style="display:none"></div>
+    <div class="upload-actions">
+      <button class="btn btn-primary" id="ubtn-subcr" onclick="doUpload('subcr')" disabled>Upload</button>
+      <button class="btn btn-secondary btn-sm" onclick="clearUpload('subcr')">Clear</button>
+    </div>
+  </div>
+  <div class="table-wrapper">
+    <table id="subcr-table"><thead></thead><tbody></tbody></table>
+  </div>
+</div>
+
 </div><!-- /main -->
 
 <!-- TOAST -->
@@ -456,7 +548,7 @@ const MONTHS_FULL  = ['January','February','March','April','May','June','July','
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 // ─── STATE ──────────────────────────────────────────────────────────────────
-let cachedData   = { forecasts:[], forecastsM:[], inbound:[], solved:[], inboundD:[], weeklyKPI:[], config:{} };
+let cachedData   = { forecasts:[], forecastsM:[], forecastsD:[], inbound:[], solved:[], inboundD:[], weeklyKPI:[], cr:[], subCR:[], config:{} };
 let cachedRole   = 'viewer';
 let currentPage  = 'overview';
 let ovMode       = 'weekly';
@@ -504,6 +596,9 @@ async function apiFetch() {
     cachedData.solved     = data.solved     || [];
     cachedData.inboundD   = data.inboundD   || [];
     cachedData.weeklyKPI  = data.weeklyKPI  || [];
+    cachedData.forecastsD = data.forecastsD || [];
+    cachedData.cr         = data.cr         || [];
+    cachedData.subCR      = data.subCR      || [];
     cachedData.config     = data.config     || {};
     cachedRole = data.role || 'viewer';
     setSyncStatus('ok');
@@ -529,7 +624,7 @@ async function apiPost(body) {
 }
 
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
-const PAGES = ['overview','tracker','upload','kpi','admin'];
+const PAGES = ['overview','tracker','upload','kpi','cr','subcr','admin'];
 
 async function navTo(page) {
   currentPage = page;
@@ -544,6 +639,8 @@ async function navTo(page) {
   if (page === 'tracker')   renderTracker();
   if (page === 'upload')    renderUpload();
   if (page === 'kpi')       renderLogKPI();
+  if (page === 'cr')        renderCR();
+  if (page === 'subcr')     renderSubCR();
   if (page === 'admin')     renderAdmin();
 }
 
@@ -673,10 +770,11 @@ function getQuarterlyData() {
 
 function getDailyData(year, month) {
   const weeks = getWeeklyData();
-  const { inboundD } = cachedData;
-  const solvedMap = {}, inboundDMap = {};
+  const { inboundD, forecastsD } = cachedData;
+  const solvedMap = {}, inboundDMap = {}, dailyFcstMap = {};
   cachedData.solved.forEach(s => { solvedMap[s.date] = s; });
   inboundD.forEach(d => { inboundDMap[d.date] = d; });
+  forecastsD.forEach(f => { dailyFcstMap[f.date] = f; });
 
   const daysInMonth = new Date(year, month+1, 0).getDate();
   const allDays = [];
@@ -690,14 +788,16 @@ function getDailyData(year, month) {
       const we = new Date(ws); we.setDate(ws.getDate()+6);
       return date >= ws && date <= we;
     });
+    // Use daily forecast if uploaded, otherwise distribute weekly via DOW factors
+    const df = dailyFcstMap[dateStr];
     const wFCST      = weekRow ? weekRow.totalFCST  : 0;
     const wChatFCST  = weekRow ? weekRow.chatFCST   : 0;
     const wEmailFCST = weekRow ? weekRow.emailFCST  : 0;
-    const dailyFCST      = wFCST      ? Math.round(wFCST      * DOW[dow]) : null;
-    const dailyChatFCST  = wChatFCST  ? Math.round(wChatFCST  * DOW[dow]) :
-                           (dailyFCST ? Math.round(dailyFCST * CHAT_PCT)  : null);
-    const dailyEmailFCST = wEmailFCST ? Math.round(wEmailFCST * DOW[dow]) :
-                           (dailyFCST ? Math.round(dailyFCST * EMAIL_PCT) : null);
+    const dailyFCST      = df ? n(df.totalFCST) : (wFCST      ? Math.round(wFCST      * DOW[dow]) : null);
+    const dailyChatFCST  = df ? n(df.chatFCST)  : (wChatFCST  ? Math.round(wChatFCST  * DOW[dow]) :
+                           (dailyFCST ? Math.round(dailyFCST * CHAT_PCT)  : null));
+    const dailyEmailFCST = df ? n(df.emailFCST) : (wEmailFCST ? Math.round(wEmailFCST * DOW[dow]) :
+                           (dailyFCST ? Math.round(dailyFCST * EMAIL_PCT) : null));
     const sv = solvedMap[dateStr]   || {};
     const id = inboundDMap[dateStr] || {};
     allDays.push({
@@ -1025,13 +1125,18 @@ function processUploadFile(file, type) {
   reader.onload = e => {
     const text = e.target.result;
     let records = [];
-    const year = type === 'forecast' ? (parseInt(document.getElementById('fcst-year').value)||2026) : 2026;
+    const year = type === 'forecast' ? (parseInt(document.getElementById('fcst-year').value)||2026)
+              : type === 'forecast-daily' ? (parseInt(document.getElementById('fcst-daily-year').value)||2026)
+              : 2026;
     if (type === 'only-inbound')      records = parseOnlyInboundCSV(text, year);
     if (type === 'inbound-total')     records = parseInboundTotalCSV(text, year);
     if (type === 'solved')            records = parseDailyChannelCSV(text, 'solved');
     if (type === 'inbound-daily')     records = parseDailyChannelCSV(text, 'inbound');
     if (type === 'forecast')          records = parseForecastCSV(text, year);
+    if (type === 'forecast-daily')    records = parseDailyForecastCSV(text, year);
     if (type === 'forecast-monthly')  records = parseMonthlyForecastCSV(text);
+    if (type === 'cr')                records = parseContactReasonCSV(text, 'cr');
+    if (type === 'subcr')             records = parseContactReasonCSV(text, 'subcr');
     parsedFiles[type] = records;
     const preview = document.getElementById('preview-'+type);
     if (preview) {
@@ -1064,7 +1169,10 @@ async function doUpload(type) {
     'solved':            { action:'uploadSolved',          key:'records' },
     'inbound-daily':     { action:'uploadInboundD',        key:'records' },
     'forecast':          { action:'uploadForecast',        key:'records' },
+    'forecast-daily':    { action:'uploadDailyForecast',   key:'records' },
     'forecast-monthly':  { action:'uploadMonthlyForecast', key:'records' },
+    'cr':                { action:'uploadCR',              key:'records' },
+    'subcr':             { action:'uploadSubCR',           key:'records' },
   };
   const { action } = actionMap[type];
   showLoading(true, `Uploading ${records.length} records…`);
@@ -1077,6 +1185,8 @@ async function doUpload(type) {
     await apiFetch();
     if (currentPage === 'overview') renderOverview();
     if (currentPage === 'tracker')  renderTracker();
+    if (currentPage === 'cr')       renderCR();
+    if (currentPage === 'subcr')    renderSubCR();
   } catch(err) {
     showToast('Upload failed: ' + err.message, '#EF4444');
   } finally { showLoading(false); }
@@ -1228,6 +1338,47 @@ function parseForecastCSV(text, year=2026) {
   return results;
 }
 
+// Format 5b: Daily Forecast CSV — same source file as weekly, extracts daily rows
+// Cols: Week, Date, SMS, Chat, SoMe, Email — uses individual day rows (non-total rows with a date)
+function parseDailyForecastCSV(text, year=2026) {
+  const lines = parseCSV(text);
+  if (lines.length < 2) return [];
+  const results = [];
+  let currentWk = null;
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i];
+    const wCol = String(row[0]||'').trim();
+    const dCol = String(row[1]||'').trim();
+    if (wCol.toLowerCase().includes('grand')) continue;
+    // Weekly total row — capture week number, skip
+    if (wCol.toLowerCase().includes('total') || (wCol && !isNaN(wCol) && dCol==='')) {
+      if (wCol && !isNaN(wCol)) currentWk = parseInt(wCol);
+      continue;
+    }
+    // Week number row with date
+    if (wCol && !isNaN(parseInt(wCol))) { currentWk = parseInt(wCol); }
+    // Daily row: has a date in col 1
+    if (dCol) {
+      const fd = parseFlexDate(dCol);
+      if (!fd) continue;
+      const orig = new Date(fd+'T12:00:00');
+      const adj  = new Date(year, orig.getMonth(), orig.getDate());
+      const sms   = parseFloat(String(row[2]||'').replace(/,/g,''))||0;
+      const chat  = parseFloat(String(row[3]||'').replace(/,/g,''))||0;
+      const soMe  = parseFloat(String(row[4]||'').replace(/,/g,''))||0;
+      const email = parseFloat(String(row[5]||'').replace(/,/g,''))||0;
+      const chatFCST  = sms + chat;
+      const emailFCST = soMe + email;
+      const dateStr = adj.toISOString().split('T')[0];
+      const ws = weekStartMon(adj);
+      results.push({ date:dateStr, week:currentWk||isoWeek(adj), weekStart:ws,
+        chatFCST, emailFCST, totalFCST:chatFCST+emailFCST });
+    }
+  }
+  results.sort((a,b)=>a.date.localeCompare(b.date));
+  return results;
+}
+
 // Format 6: Monthly Forecast CSV
 // Cols: "Date - Month", "SUM of SMS-CX_V", "SUM of Chat-CX_V", "SUM of SoMe-CX_V", "SUM of Email-CX_V"
 // Rows: Jan, Feb, ... (or full month names), Grand Total
@@ -1301,6 +1452,146 @@ function parseFlexDate(str) {
   }
   if (str.match(/^\d{4}-\d{2}-\d{2}$/)) return str;
   return null;
+}
+
+// ─── CONTACT REASON PARSER ───────────────────────────────────────────────────
+// Wide format: Col0=label, Col1=Breakdown II (always "Total"), Col2+= week dates (Sundays)
+// For 'cr': records = { reason, weekStart, count }
+// For 'subcr': records = { subReason, parentReason, weekStart, count }
+function parseContactReasonCSV(text, mode) {
+  const lines = parseCSV(text);
+  if (lines.length < 2) return [];
+  const header = lines[0];
+  // Cols 2+ are week-start dates (Sundays)
+  const weekDates = header.slice(2).map(h => parseFlexDate(h.trim())).filter(Boolean);
+  const results = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i];
+    const label = (row[0] || '').trim();
+    const bII   = (row[1] || '').trim().toLowerCase();
+    // Skip grand total row (blank label) and non-Total rows
+    if (!label || bII !== 'total') continue;
+
+    header.slice(2).forEach((hdr, idx) => {
+      const weekStart = parseFlexDate(hdr.trim());
+      if (!weekStart) return;
+      const raw = String(row[2 + idx] || '').replace(/,/g, '').trim();
+      const count = parseFloat(raw) || 0;
+      if (mode === 'cr') {
+        results.push({ reason: label.toLowerCase(), weekStart, count });
+      } else {
+        // Sub CR: "parent reason - sub reason" → split on first " - "
+        const dashIdx = label.indexOf(' - ');
+        const parentReason = dashIdx >= 0 ? label.slice(0, dashIdx).trim().toLowerCase() : label.toLowerCase();
+        results.push({ subReason: label.toLowerCase(), parentReason, weekStart, count });
+      }
+    });
+  }
+  return results;
+}
+
+// ─── CONTACT REASON RENDER ────────────────────────────────────────────────────
+function renderCR() {
+  const tbl = document.getElementById('cr-table');
+  const data = cachedData.cr;
+  if (!data.length) {
+    tbl.querySelector('tbody').innerHTML = `<tr><td colspan="99"><div class="empty-state"><p>No contact reason data.</p><small>Upload the Contact Reason CSV above.</small></div></td></tr>`;
+    tbl.querySelector('thead').innerHTML = '';
+    return;
+  }
+  _renderCRTable(tbl, data, 'reason', null);
+}
+
+function renderSubCR() {
+  const tbl = document.getElementById('subcr-table');
+  const data = cachedData.subCR;
+  if (!data.length) {
+    tbl.querySelector('tbody').innerHTML = `<tr><td colspan="99"><div class="empty-state"><p>No sub contact reason data.</p><small>Upload the Sub CR CSV above.</small></div></td></tr>`;
+    tbl.querySelector('thead').innerHTML = '';
+    return;
+  }
+  // Populate filter dropdown
+  const sel = document.getElementById('subcr-filter');
+  const parents = [...new Set(data.map(r => r.parentReason || '').filter(Boolean))].sort();
+  const curVal = sel.value;
+  sel.innerHTML = '<option value="">— All Parent Reasons —</option>';
+  parents.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p; opt.textContent = p;
+    sel.appendChild(opt);
+  });
+  if (curVal) sel.value = curVal;
+  const filterVal = sel.value;
+  const filtered = filterVal ? data.filter(r => r.parentReason === filterVal) : data;
+  _renderCRTable(tbl, filtered, 'subReason', 'parentReason');
+}
+
+function _renderCRTable(tbl, data, labelKey, parentKey) {
+  // Get last 8 distinct week starts, sorted ascending
+  const allWeeks = [...new Set(data.map(r => r.weekStart))].sort().slice(-8);
+
+  // Build map: label → { weekStart → count }
+  const map = {};
+  data.forEach(r => {
+    const lbl = r[labelKey] || '';
+    if (!map[lbl]) map[lbl] = { parentReason: r.parentReason || '' };
+    map[lbl][r.weekStart] = (map[lbl][r.weekStart] || 0) + (parseFloat(r.count) || 0);
+  });
+
+  // Compute column totals per week (for share%)
+  const weekTotals = {};
+  allWeeks.forEach(w => {
+    weekTotals[w] = Object.values(map).reduce((s, v) => s + (v[w] || 0), 0);
+  });
+
+  // Build header: label col + (count | share%) per week
+  let thead = '<tr>';
+  if (parentKey) thead += '<th>Parent Reason</th>';
+  thead += '<th style="text-align:left">Contact Reason</th>';
+  allWeeks.forEach(w => {
+    const d = new Date(w + 'T12:00:00');
+    const label = isNaN(d) ? w : `${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
+    thead += `<th colspan="2" class="group-header">${label}</th>`;
+  });
+  thead += '</tr><tr>';
+  if (parentKey) thead += '<th></th>';
+  thead += '<th></th>';
+  allWeeks.forEach(() => { thead += '<th>Count</th><th>Share%</th>'; });
+  thead += '</tr>';
+  tbl.querySelector('thead').innerHTML = thead;
+
+  // Sort rows by total count desc
+  const rows = Object.entries(map).sort((a, b) => {
+    const ta = allWeeks.reduce((s, w) => s + (a[1][w] || 0), 0);
+    const tb = allWeeks.reduce((s, w) => s + (b[1][w] || 0), 0);
+    return tb - ta;
+  });
+
+  let tbody = '';
+  rows.forEach(([lbl, rec]) => {
+    tbody += '<tr>';
+    if (parentKey) tbody += `<td style="text-align:left;font-size:11px;color:var(--mid)">${rec.parentReason || ''}</td>`;
+    tbody += `<td style="text-align:left;font-weight:600;min-width:220px">${lbl}</td>`;
+    allWeeks.forEach(w => {
+      const cnt = rec[w] || 0;
+      const tot = weekTotals[w] || 0;
+      const pct = tot ? (cnt / tot * 100) : 0;
+      tbody += `<td>${cnt ? fmtN(cnt) : '-'}</td><td style="color:var(--mid)">${cnt ? fmtPct(pct) : '-'}</td>`;
+    });
+    tbody += '</tr>';
+  });
+
+  // Totals row
+  tbody += '<tr style="background:#E0F2FE;font-weight:700">';
+  if (parentKey) tbody += '<td></td>';
+  tbody += '<td style="text-align:left">TOTAL</td>';
+  allWeeks.forEach(w => {
+    tbody += `<td>${fmtN(weekTotals[w])}</td><td>100%</td>`;
+  });
+  tbody += '</tr>';
+
+  tbl.querySelector('tbody').innerHTML = tbody;
 }
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
