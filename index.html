@@ -308,14 +308,14 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
       </div>
     </div>
 
-    <!-- Forecast -->
+    <!-- Weekly & Daily Forecast -->
     <div class="upload-card">
-      <div class="format-badge">FORECAST</div>
-      <h3>🎯 Weekly Forecast</h3>
-      <p>Upload "Weekly &amp; Daily Forecast" CSV to seed inbound targets.<br>
-         Format: Week, Date, SMS, Chat, SoMe, Email columns with weekly total rows.</p>
+      <div class="format-badge">FORECAST · WEEKLY</div>
+      <h3>🎯 Weekly &amp; Daily Forecast</h3>
+      <p>CSV with Week, Date, SMS, Chat, SoMe, Email columns — uses the weekly total rows.<br>
+         <em>Inbound and HC - 2026 - Weekly &amp; Daily Forecast.csv</em></p>
       <div style="margin-bottom:10px">
-        <label style="font-size:11px;font-weight:700;color:var(--mid);display:block;margin-bottom:4px">TARGET YEAR (enter if CSV dates are from a prior year)</label>
+        <label style="font-size:11px;font-weight:700;color:var(--mid);display:block;margin-bottom:4px">TARGET YEAR (if CSV dates are from a prior year)</label>
         <input type="number" id="fcst-year" value="2026" style="width:100px;padding:6px 10px;border:2px solid var(--border);border-radius:6px;font-size:13px">
       </div>
       <div class="upload-zone" id="zone-forecast" ondragover="dragOver(event,'zone-forecast')" ondragleave="dragLeave('zone-forecast')" ondrop="dropFile(event,'forecast')">
@@ -328,6 +328,25 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
       <div class="upload-actions">
         <button class="btn btn-primary" id="ubtn-forecast" onclick="doUpload('forecast')" disabled>Upload</button>
         <button class="btn btn-secondary btn-sm" onclick="clearUpload('forecast')">Clear</button>
+      </div>
+    </div>
+
+    <!-- Monthly Forecast -->
+    <div class="upload-card">
+      <div class="format-badge">FORECAST · MONTHLY</div>
+      <h3>📆 Monthly Forecast</h3>
+      <p>CSV with month rows and channel columns (SMS, Chat, SoMe, Email).<br>
+         <em>Inbound and HC - 2026 - Monthly forecast.csv</em></p>
+      <div class="upload-zone" id="zone-forecast-monthly" ondragover="dragOver(event,'zone-forecast-monthly')" ondragleave="dragLeave('zone-forecast-monthly')" ondrop="dropFile(event,'forecast-monthly')">
+        <input type="file" accept=".csv" id="file-forecastmonthly" onchange="fileChosen(event,'forecast-monthly')">
+        <div class="uf-icon">📂</div>
+        <strong id="fname-forecast-monthly">Choose file or drag here</strong>
+        <p>Inbound and HC - 2026 - Monthly forecast.csv</p>
+      </div>
+      <div id="preview-forecast-monthly" class="upload-preview" style="display:none"></div>
+      <div class="upload-actions">
+        <button class="btn btn-primary" id="ubtn-forecast-monthly" onclick="doUpload('forecast-monthly')" disabled>Upload</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearUpload('forecast-monthly')">Clear</button>
       </div>
     </div>
 
@@ -437,7 +456,7 @@ const MONTHS_FULL  = ['January','February','March','April','May','June','July','
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 // ─── STATE ──────────────────────────────────────────────────────────────────
-let cachedData   = { forecasts:[], inbound:[], solved:[], inboundD:[], weeklyKPI:[], config:{} };
+let cachedData   = { forecasts:[], forecastsM:[], inbound:[], solved:[], inboundD:[], weeklyKPI:[], config:{} };
 let cachedRole   = 'viewer';
 let currentPage  = 'overview';
 let ovMode       = 'weekly';
@@ -479,12 +498,13 @@ async function apiFetch() {
     const res = await fetch(ep, { redirect: 'follow' });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    cachedData.forecasts = data.forecasts  || [];
-    cachedData.inbound   = data.inbound    || [];
-    cachedData.solved    = data.solved     || [];
-    cachedData.inboundD  = data.inboundD   || [];
-    cachedData.weeklyKPI = data.weeklyKPI  || [];
-    cachedData.config    = data.config     || {};
+    cachedData.forecasts  = data.forecasts  || [];
+    cachedData.forecastsM = data.forecastsM || [];
+    cachedData.inbound    = data.inbound    || [];
+    cachedData.solved     = data.solved     || [];
+    cachedData.inboundD   = data.inboundD   || [];
+    cachedData.weeklyKPI  = data.weeklyKPI  || [];
+    cachedData.config     = data.config     || {};
     cachedRole = data.role || 'viewer';
     setSyncStatus('ok');
   } catch(err) {
@@ -1006,11 +1026,12 @@ function processUploadFile(file, type) {
     const text = e.target.result;
     let records = [];
     const year = type === 'forecast' ? (parseInt(document.getElementById('fcst-year').value)||2026) : 2026;
-    if (type === 'only-inbound')    records = parseOnlyInboundCSV(text, year);
-    if (type === 'inbound-total')   records = parseInboundTotalCSV(text, year);
-    if (type === 'solved')          records = parseDailyChannelCSV(text, 'solved');
-    if (type === 'inbound-daily')   records = parseDailyChannelCSV(text, 'inbound');
-    if (type === 'forecast')        records = parseForecastCSV(text, year);
+    if (type === 'only-inbound')      records = parseOnlyInboundCSV(text, year);
+    if (type === 'inbound-total')     records = parseInboundTotalCSV(text, year);
+    if (type === 'solved')            records = parseDailyChannelCSV(text, 'solved');
+    if (type === 'inbound-daily')     records = parseDailyChannelCSV(text, 'inbound');
+    if (type === 'forecast')          records = parseForecastCSV(text, year);
+    if (type === 'forecast-monthly')  records = parseMonthlyForecastCSV(text);
     parsedFiles[type] = records;
     const preview = document.getElementById('preview-'+type);
     if (preview) {
@@ -1038,11 +1059,12 @@ async function doUpload(type) {
   const records = parsedFiles[type];
   if (!records || !records.length) { showToast('No records to upload', '#F59E0B'); return; }
   const actionMap = {
-    'only-inbound':   { action:'uploadInbound',  key:'records' },
-    'inbound-total':  { action:'uploadInbound',  key:'records' },
-    'solved':         { action:'uploadSolved',   key:'records' },
-    'inbound-daily':  { action:'uploadInboundD', key:'records' },
-    'forecast':       { action:'uploadForecast', key:'records' },
+    'only-inbound':      { action:'uploadInbound',         key:'records' },
+    'inbound-total':     { action:'uploadInbound',         key:'records' },
+    'solved':            { action:'uploadSolved',          key:'records' },
+    'inbound-daily':     { action:'uploadInboundD',        key:'records' },
+    'forecast':          { action:'uploadForecast',        key:'records' },
+    'forecast-monthly':  { action:'uploadMonthlyForecast', key:'records' },
   };
   const { action } = actionMap[type];
   showLoading(true, `Uploading ${records.length} records…`);
@@ -1202,6 +1224,42 @@ function parseForecastCSV(text, year=2026) {
     } else if (!wCol && dCol && !firstDate) {
       firstDate = dCol;
     }
+  }
+  return results;
+}
+
+// Format 6: Monthly Forecast CSV
+// Cols: "Date - Month", "SUM of SMS-CX_V", "SUM of Chat-CX_V", "SUM of SoMe-CX_V", "SUM of Email-CX_V"
+// Rows: Jan, Feb, ... (or full month names), Grand Total
+function parseMonthlyForecastCSV(text) {
+  const lines = parseCSV(text);
+  if (lines.length < 2) return [];
+  const MONTH_MAP = {
+    jan:0,feb:1,mar:2,apr:3,may:4,jun:5,
+    jul:6,aug:7,sep:8,oct:9,nov:10,dec:11,
+    january:0,february:1,march:2,april:3,june:5,
+    july:6,august:7,september:8,october:9,november:10,december:11
+  };
+  const results = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i];
+    const mRaw = (row[0]||'').trim().toLowerCase();
+    if (!mRaw || mRaw.includes('grand') || mRaw.includes('total')) continue;
+    const mIdx = MONTH_MAP[mRaw];
+    if (mIdx === undefined) continue;
+    const sms   = parseFloat(String(row[1]||'').replace(/,/g,''))||0;
+    const chat  = parseFloat(String(row[2]||'').replace(/,/g,''))||0;
+    const soMe  = parseFloat(String(row[3]||'').replace(/,/g,''))||0;
+    const email = parseFloat(String(row[4]||'').replace(/,/g,''))||0;
+    const chatFCST  = sms + chat;
+    const emailFCST = soMe + email;
+    results.push({
+      month: MONTHS_FULL[mIdx],
+      monthIndex: mIdx,
+      chatFCST,
+      emailFCST,
+      totalFCST: chatFCST + emailFCST,
+    });
   }
   return results;
 }
