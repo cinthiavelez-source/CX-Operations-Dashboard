@@ -1463,33 +1463,35 @@ function parseFlexDate(str) {
 }
 
 // ─── CONTACT REASON PARSER ───────────────────────────────────────────────────
-// Wide format: Col0=label, Col1=Breakdown II (always "Total"), Col2+= week dates (Sundays)
+// Source files are UTF-16 TSV (tab-separated) exports from BI tool.
+// Format: Col0=Breakdown I (label), Col1=Breakdown II ("Total"), Col2+= week dates (Sundays)
 // For 'cr': records = { reason, weekStart, count }
 // For 'subcr': records = { subReason, parentReason, weekStart, count }
 function parseContactReasonCSV(text, mode) {
-  const lines = parseCSV(text);
+  // Auto-detect delimiter: use tab if any tab is found in the first line
+  const firstLine = text.split(/\r?\n/)[0] || '';
+  const sep = firstLine.includes('\t') ? '\t' : ',';
+  const lines = parseTSV(text, sep);
   if (lines.length < 2) return [];
   const header = lines[0];
-  // Cols 2+ are week-start dates (Sundays)
-  const weekDates = header.slice(2).map(h => parseFlexDate(h.trim())).filter(Boolean);
   const results = [];
 
   for (let i = 1; i < lines.length; i++) {
     const row = lines[i];
-    const label = (row[0] || '').trim();
+    const label = (row[0] || '').trim().replace(/﻿/g, '');
     const bII   = (row[1] || '').trim().toLowerCase();
     // Skip grand total row (blank label) and non-Total rows
     if (!label || bII !== 'total') continue;
 
     header.slice(2).forEach((hdr, idx) => {
-      const weekStart = parseFlexDate(hdr.trim());
+      const weekStart = parseFlexDate((hdr || '').trim().replace(/﻿/g,''));
       if (!weekStart) return;
-      const raw = String(row[2 + idx] || '').replace(/,/g, '').trim();
+      const raw = String(row[2 + idx] || '').replace(/,/g, '').replace(/﻿/g,'').trim();
       const count = parseFloat(raw) || 0;
       if (mode === 'cr') {
         results.push({ reason: label.toLowerCase(), weekStart, count });
       } else {
-        // Sub CR: "parent reason - sub reason" → split on first " - "
+        // Sub CR: "parent - sub" → split on first " - "
         const dashIdx = label.indexOf(' - ');
         const parentReason = dashIdx >= 0 ? label.slice(0, dashIdx).trim().toLowerCase() : label.toLowerCase();
         results.push({ subReason: label.toLowerCase(), parentReason, weekStart, count });
@@ -1497,6 +1499,17 @@ function parseContactReasonCSV(text, mode) {
     });
   }
   return results;
+}
+
+// Tab (or custom separator) parser — simpler than parseCSV since BI exports don't quote fields
+function parseTSV(text, sep='\t') {
+  const lines = [];
+  const rawLines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  for (const rl of rawLines) {
+    const row = rl.split(sep).map(f => f.trim());
+    if (row.some(f => f)) lines.push(row);
+  }
+  return lines;
 }
 
 // ─── CONTACT REASON RENDER ────────────────────────────────────────────────────
