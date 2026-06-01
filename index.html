@@ -1121,12 +1121,20 @@ function fileChosen(e, type) {
 function processUploadFile(file, type) {
   const nameEl = document.getElementById('fname-'+type);
   if (nameEl) nameEl.textContent = file.name;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const text = e.target.result;
+
+  // Read as ArrayBuffer to detect encoding (handles UTF-16 LE/BE from BI exports)
+  const bufReader = new FileReader();
+  bufReader.onload = e => {
+    const buf = e.target.result;
+    const bytes = new Uint8Array(buf.slice(0, 4));
+    let encoding = 'utf-8';
+    if      (bytes[0] === 0xFF && bytes[1] === 0xFE) encoding = 'utf-16le';
+    else if (bytes[0] === 0xFE && bytes[1] === 0xFF) encoding = 'utf-16be';
+    const text = new TextDecoder(encoding).decode(buf).replace(/^﻿/, ''); // strip BOM
+
     let records = [];
-    const year = type === 'forecast' ? (parseInt(document.getElementById('fcst-year').value)||2026)
-              : type === 'forecast-daily' ? (parseInt(document.getElementById('fcst-daily-year').value)||2026)
+    const year = type === 'forecast'       ? (parseInt(document.getElementById('fcst-year').value)||2026)
+              : type === 'forecast-daily'  ? (parseInt(document.getElementById('fcst-daily-year').value)||2026)
               : 2026;
     if (type === 'only-inbound')      records = parseOnlyInboundCSV(text, year);
     if (type === 'inbound-total')     records = parseInboundTotalCSV(text, year);
@@ -1147,7 +1155,7 @@ function processUploadFile(file, type) {
     const btn = document.getElementById('ubtn-'+type);
     if (btn) btn.disabled = records.length === 0;
   };
-  reader.readAsText(file);
+  bufReader.readAsArrayBuffer(file);
 }
 
 function clearUpload(type) {
