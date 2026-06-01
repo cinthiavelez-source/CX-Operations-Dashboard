@@ -474,7 +474,12 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
   <div class="page-header">
     <h2>Contact Reason</h2>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <span style="font-size:12px;color:var(--mid)">Last 8 weeks · Sun–Sat</span>
+      <span style="font-size:12px;color:var(--mid)">Sun–Sat weeks</span>
+      <label style="font-size:12px;font-weight:600;color:var(--mid)">From:</label>
+      <input type="date" id="cr-from" onchange="renderCR()" style="padding:5px 8px;border:2px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+      <label style="font-size:12px;font-weight:600;color:var(--mid)">To:</label>
+      <input type="date" id="cr-to" onchange="renderCR()" style="padding:5px 8px;border:2px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+      <button onclick="resetCRRange()" style="padding:5px 10px;border:2px solid var(--border);border-radius:6px;font-size:12px;background:#fff;cursor:pointer;font-weight:600;color:var(--mid)">Last 5 wks</button>
     </div>
   </div>
   <div id="cr-upload-inline" class="card" style="margin-bottom:16px">
@@ -503,8 +508,12 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <label style="font-size:12px;font-weight:700;color:var(--mid)">Filter:</label>
       <select id="subcr-filter" onchange="renderSubCR()" style="padding:6px 10px;border:2px solid var(--border);border-radius:6px;font-size:12px;outline:none">
-        <option value="">— All Parent Reasons —</option>
       </select>
+      <label style="font-size:12px;font-weight:600;color:var(--mid)">From:</label>
+      <input type="date" id="subcr-from" onchange="renderSubCR()" style="padding:5px 8px;border:2px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+      <label style="font-size:12px;font-weight:600;color:var(--mid)">To:</label>
+      <input type="date" id="subcr-to" onchange="renderSubCR()" style="padding:5px 8px;border:2px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+      <button onclick="resetSubCRRange()" style="padding:5px 10px;border:2px solid var(--border);border-radius:6px;font-size:12px;background:#fff;cursor:pointer;font-weight:600;color:var(--mid)">Last 5 wks</button>
     </div>
   </div>
   <div id="subcr-upload-inline" class="card" style="margin-bottom:16px">
@@ -1305,83 +1314,65 @@ function parseDailyChannelCSV(text, mode='solved') {
   return results;
 }
 
-// Format 5: Weekly & Daily Forecast CSV
-// Cols: Week, Date, SMS, Chat, SoMe, Email — use "X Total" rows
+// Format 5: Weekly Forecast CSV
+// Cols: Week, SUM of Live_adj, SUM of Some_adj, SUM of Email_adj
+// Rows: W1, W2, ... — one row per ISO week
 function parseForecastCSV(text, year=2026) {
   const lines = parseCSV(text);
   if (lines.length < 2) return [];
   const results = [];
-  let currentWk = null, firstDate = null;
+  const pn = s => parseFloat(String(s||'').replace(/,/g,''))||0;
   for (let i = 1; i < lines.length; i++) {
     const row = lines[i];
     const wCol = String(row[0]||'').trim();
-    const dCol = String(row[1]||'').trim();
-    if (wCol.toLowerCase().includes('grand')) continue;
-    if (wCol.toLowerCase().includes('total') || (wCol && !isNaN(wCol) && dCol==='')) {
-      // Weekly total row
-      const sms=parseFloat(String(row[2]||'').replace(/,/g,''))||0;
-      const chat=parseFloat(String(row[3]||'').replace(/,/g,''))||0;
-      const soMe=parseFloat(String(row[4]||'').replace(/,/g,''))||0;
-      const email=parseFloat(String(row[5]||'').replace(/,/g,''))||0;
-      if (currentWk !== null && firstDate) {
-        let fd = parseFlexDate(firstDate);
-        if (fd) {
-          // Adjust year
-          const orig = new Date(fd+'T12:00:00');
-          const adj  = new Date(year, orig.getMonth(), orig.getDate());
-          const ws   = weekStartMon(adj);
-          const chatFCST  = sms + chat;
-          const emailFCST = soMe + email;
-          results.push({ week:isoWeek(adj), weekStart:ws,
-            month: monthFromDate(ws), chatFCST, emailFCST, totalFCST:chatFCST+emailFCST });
-        }
-      }
-      currentWk = null; firstDate = null;
-    } else if (wCol && !isNaN(parseInt(wCol))) {
-      currentWk = parseInt(wCol); firstDate = dCol || null;
-    } else if (!wCol && dCol && !firstDate) {
-      firstDate = dCol;
-    }
+    if (!wCol || wCol.toLowerCase().includes('grand') || wCol.toLowerCase().includes('total')) continue;
+    const wkMatch = wCol.match(/^[Ww](\d+)$/);
+    if (!wkMatch) continue;
+    const wkNum = parseInt(wkMatch[1]);
+    const live  = pn(row[1]);
+    const some  = pn(row[2]);
+    const email = pn(row[3]);
+    const chatFCST  = live + some;
+    const emailFCST = email;
+    const totalFCST = live + some + email;
+    const d  = isoWeekToMon(year, wkNum);
+    const ws = d.toISOString().split('T')[0];
+    results.push({ week: wkNum, weekStart: ws, month: monthFromDate(ws),
+      chatFCST, emailFCST, totalFCST });
   }
+  results.sort((a,b)=>a.week-b.week);
   return results;
 }
 
-// Format 5b: Daily Forecast CSV — same source file as weekly, extracts daily rows
-// Cols: Week, Date, SMS, Chat, SoMe, Email — uses individual day rows (non-total rows with a date)
+// Format 5b: Daily Forecast CSV
+// Cols: Date, Week, SUM of Live_adj, SUM of Some_adj, SUM of Email_adj
+// Rows: one per day, date in M/D/YYYY format
 function parseDailyForecastCSV(text, year=2026) {
   const lines = parseCSV(text);
   if (lines.length < 2) return [];
   const results = [];
-  let currentWk = null;
+  const pn = s => parseFloat(String(s||'').replace(/,/g,''))||0;
   for (let i = 1; i < lines.length; i++) {
     const row = lines[i];
-    const wCol = String(row[0]||'').trim();
-    const dCol = String(row[1]||'').trim();
-    if (wCol.toLowerCase().includes('grand')) continue;
-    // Weekly total row — capture week number, skip
-    if (wCol.toLowerCase().includes('total') || (wCol && !isNaN(wCol) && dCol==='')) {
-      if (wCol && !isNaN(wCol)) currentWk = parseInt(wCol);
-      continue;
-    }
-    // Week number row with date
-    if (wCol && !isNaN(parseInt(wCol))) { currentWk = parseInt(wCol); }
-    // Daily row: has a date in col 1
-    if (dCol) {
-      const fd = parseFlexDate(dCol);
-      if (!fd) continue;
-      const orig = new Date(fd+'T12:00:00');
-      const adj  = new Date(year, orig.getMonth(), orig.getDate());
-      const sms   = parseFloat(String(row[2]||'').replace(/,/g,''))||0;
-      const chat  = parseFloat(String(row[3]||'').replace(/,/g,''))||0;
-      const soMe  = parseFloat(String(row[4]||'').replace(/,/g,''))||0;
-      const email = parseFloat(String(row[5]||'').replace(/,/g,''))||0;
-      const chatFCST  = sms + chat;
-      const emailFCST = soMe + email;
-      const dateStr = adj.toISOString().split('T')[0];
-      const ws = weekStartMon(adj);
-      results.push({ date:dateStr, week:currentWk||isoWeek(adj), weekStart:ws,
-        chatFCST, emailFCST, totalFCST:chatFCST+emailFCST });
-    }
+    const dCol = String(row[0]||'').trim();
+    const wCol = String(row[1]||'').trim();
+    if (!dCol || dCol.toLowerCase().includes('date')) continue;
+    // Parse M/D/YYYY date, adjust to target year
+    const fd = parseFlexDate(dCol);
+    if (!fd) continue;
+    const orig = new Date(fd+'T12:00:00');
+    const adj  = new Date(year, orig.getMonth(), orig.getDate());
+    const live  = pn(row[2]);
+    const some  = pn(row[3]);
+    const email = pn(row[4]);
+    const chatFCST  = live + some;
+    const emailFCST = email;
+    const dateStr = adj.toISOString().split('T')[0];
+    const ws = weekStartMon(adj);
+    const wkMatch = wCol.match(/^[Ww](\d+)$/);
+    const wkNum = wkMatch ? parseInt(wkMatch[1]) : isoWeek(adj);
+    results.push({ date:dateStr, week:wkNum, weekStart:ws,
+      chatFCST, emailFCST, totalFCST:chatFCST+emailFCST });
   }
   results.sort((a,b)=>a.date.localeCompare(b.date));
   return results;
@@ -1406,12 +1397,11 @@ function parseMonthlyForecastCSV(text) {
     if (!mRaw || mRaw.includes('grand') || mRaw.includes('total')) continue;
     const mIdx = MONTH_MAP[mRaw];
     if (mIdx === undefined) continue;
-    const sms   = parseFloat(String(row[1]||'').replace(/,/g,''))||0;
-    const chat  = parseFloat(String(row[2]||'').replace(/,/g,''))||0;
-    const soMe  = parseFloat(String(row[3]||'').replace(/,/g,''))||0;
-    const email = parseFloat(String(row[4]||'').replace(/,/g,''))||0;
-    const chatFCST  = sms + chat;
-    const emailFCST = soMe + email;
+    const live  = parseFloat(String(row[1]||'').replace(/,/g,''))||0;
+    const some  = parseFloat(String(row[2]||'').replace(/,/g,''))||0;
+    const email = parseFloat(String(row[3]||'').replace(/,/g,''))||0;
+    const chatFCST  = live + some;
+    const emailFCST = email;
     results.push({
       month: MONTHS_FULL[mIdx],
       monthIndex: mIdx,
@@ -1512,6 +1502,28 @@ function parseTSV(text, sep='\t') {
   return lines;
 }
 
+// ─── WEEK RANGE HELPERS ───────────────────────────────────────────────────────
+function _filterWeeks(allWeeksSorted, fromId, toId, defaultN) {
+  const fromVal = (document.getElementById(fromId) || {}).value;
+  const toVal   = (document.getElementById(toId)   || {}).value;
+  if (!fromVal && !toVal) return allWeeksSorted.slice(-defaultN);
+  return allWeeksSorted.filter(w => {
+    if (fromVal && w < fromVal) return false;
+    if (toVal   && w > toVal)   return false;
+    return true;
+  });
+}
+function resetCRRange() {
+  const f = document.getElementById('cr-from'); if (f) f.value = '';
+  const t = document.getElementById('cr-to');   if (t) t.value = '';
+  renderCR();
+}
+function resetSubCRRange() {
+  const f = document.getElementById('subcr-from'); if (f) f.value = '';
+  const t = document.getElementById('subcr-to');   if (t) t.value = '';
+  renderSubCR();
+}
+
 // ─── CONTACT REASON RENDER ────────────────────────────────────────────────────
 function renderCR() {
   const tbl = document.getElementById('cr-table');
@@ -1521,7 +1533,10 @@ function renderCR() {
     tbl.querySelector('thead').innerHTML = '';
     return;
   }
-  _renderCRTable(tbl, data, 'reason', null);
+  const normData = data.map(r => ({ ...r, _ws: _wsKey(r.weekStart) }));
+  const allWeeks = [...new Set(normData.map(r => r._ws))].sort();
+  const displayWeeks = _filterWeeks(allWeeks, 'cr-from', 'cr-to', 5);
+  _renderCRTable(tbl, data, 'reason', null, displayWeeks);
 }
 
 function renderSubCR() {
@@ -1545,7 +1560,10 @@ function renderSubCR() {
   if (curVal) sel.value = curVal;
   const filterVal = sel.value;
   const filtered = filterVal ? data.filter(r => r.parentReason === filterVal) : data;
-  _renderCRTable(tbl, filtered, 'subReason', 'parentReason');
+  const normData = filtered.map(r => ({ ...r, _ws: _wsKey(r.weekStart) }));
+  const allWeeks = [...new Set(normData.map(r => r._ws))].sort();
+  const displayWeeks = _filterWeeks(allWeeks, 'subcr-from', 'subcr-to', 5);
+  _renderCRTable(tbl, filtered, 'subReason', 'parentReason', displayWeeks);
 }
 
 // Parse a weekStart value that may come back from Sheets as an ISO timestamp
@@ -1572,14 +1590,16 @@ function _wsKey(ws) {
   return s.includes('T') ? s.split('T')[0] : s;
 }
 
-function _renderCRTable(tbl, data, labelKey, parentKey) {
+function _renderCRTable(tbl, data, labelKey, parentKey, displayWeeks) {
   // Normalize all weekStart keys in data to date-only strings
   const normData = data.map(r => ({ ...r, _ws: _wsKey(r.weekStart) }));
 
-  // All distinct weeks sorted; always show last 4 (with up to 4 prior for WoW context)
+  // All distinct weeks sorted; displayWeeks passed in from caller
   const allWeeksSorted = [...new Set(normData.map(r => r._ws))].sort();
-  const displayWeeks   = allWeeksSorted.slice(-4);   // last 4 shown
-  const prevWeeks      = allWeeksSorted.slice(-8);   // up to 8 for WoW calc
+  if (!displayWeeks || !displayWeeks.length) displayWeeks = allWeeksSorted.slice(-5);
+  // For WoW: need week before the first displayWeek too
+  const firstDisplayIdx = allWeeksSorted.indexOf(displayWeeks[0]);
+  const prevWeeks = allWeeksSorted.slice(Math.max(0, firstDisplayIdx - 1)).filter(w => displayWeeks.includes(w) || allWeeksSorted.indexOf(w) < firstDisplayIdx);
 
   // Build map: label → { _ws → count }
   const map = {};
@@ -1589,9 +1609,10 @@ function _renderCRTable(tbl, data, labelKey, parentKey) {
     map[lbl][r._ws] = (map[lbl][r._ws] || 0) + (parseFloat(r.count) || 0);
   });
 
-  // Column totals per week
+  // Column totals per week (for all displayWeeks + the prior week for WoW)
   const weekTotals = {};
-  prevWeeks.forEach(w => {
+  const weeksForTotals = new Set([...displayWeeks, ...prevWeeks]);
+  weeksForTotals.forEach(w => {
     weekTotals[w] = Object.values(map).reduce((s, v) => s + (v[w] || 0), 0);
   });
 
