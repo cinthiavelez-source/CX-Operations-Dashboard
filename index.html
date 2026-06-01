@@ -1548,66 +1548,114 @@ function renderSubCR() {
   _renderCRTable(tbl, filtered, 'subReason', 'parentReason');
 }
 
-function _renderCRTable(tbl, data, labelKey, parentKey) {
-  // Get last 8 distinct week starts, sorted ascending
-  const allWeeks = [...new Set(data.map(r => r.weekStart))].sort().slice(-8);
+// Parse a weekStart value that may come back from Sheets as an ISO timestamp
+// (e.g. "2026-04-26T04:00:00.000Z") or a plain date string ("2026-04-27")
+function _parseWS(ws) {
+  const s = String(ws || '');
+  const datePart = s.includes('T') ? s.split('T')[0] : s;
+  const d = new Date(datePart + 'T12:00:00');
+  return isNaN(d) ? null : d;
+}
 
-  // Build map: label → { weekStart → count }
+// For CR weeks (Sun–Sat): the stored date is the Sunday.
+// ISO week number = isoWeek of the following Monday.
+function _crWeekNum(ws) {
+  const sun = _parseWS(ws);
+  if (!sun) return '?';
+  const mon = new Date(sun); mon.setDate(sun.getDate() + 1);
+  return isoWeek(mon);
+}
+
+// Normalize a weekStart key for consistent map lookup (strip time part)
+function _wsKey(ws) {
+  const s = String(ws || '');
+  return s.includes('T') ? s.split('T')[0] : s;
+}
+
+function _renderCRTable(tbl, data, labelKey, parentKey) {
+  // Normalize all weekStart keys in data to date-only strings
+  const normData = data.map(r => ({ ...r, _ws: _wsKey(r.weekStart) }));
+
+  // All distinct weeks sorted; always show last 4 (with up to 4 prior for WoW context)
+  const allWeeksSorted = [...new Set(normData.map(r => r._ws))].sort();
+  const displayWeeks   = allWeeksSorted.slice(-4);   // last 4 shown
+  const prevWeeks      = allWeeksSorted.slice(-8);   // up to 8 for WoW calc
+
+  // Build map: label → { _ws → count }
   const map = {};
-  data.forEach(r => {
+  normData.forEach(r => {
     const lbl = r[labelKey] || '';
     if (!map[lbl]) map[lbl] = { parentReason: r.parentReason || '' };
-    map[lbl][r.weekStart] = (map[lbl][r.weekStart] || 0) + (parseFloat(r.count) || 0);
+    map[lbl][r._ws] = (map[lbl][r._ws] || 0) + (parseFloat(r.count) || 0);
   });
 
-  // Compute column totals per week (for share%)
+  // Column totals per week
   const weekTotals = {};
-  allWeeks.forEach(w => {
+  prevWeeks.forEach(w => {
     weekTotals[w] = Object.values(map).reduce((s, v) => s + (v[w] || 0), 0);
   });
 
-  // Build header: label col + (count | share%) per week
+  // WoW share color: compare displayWeeks[i] vs displayWeeks[i-1]
+  // Returns css class for the Share% cell
+  function wowColor(lbl, wIdx) {
+    if (wIdx === 0) return '';
+    const curW  = displayWeeks[wIdx];
+    const prevW = displayWeeks[wIdx - 1];
+    const rec   = map[lbl] || {};
+    const curTot  = weekTotals[curW]  || 0;
+    const prevTot = weekTotals[prevW] || 0;
+    if (!curTot || !prevTot) return '';
+    const curPct  = (rec[curW]  || 0) / curTot  * 100;
+    const prevPct = (rec[prevW] || 0) / prevTot * 100;
+    const diff = curPct - prevPct;
+    if (diff >  0.5) return 'cell-green';
+    if (diff < -0.5) return 'cell-red';
+    return 'cell-yellow';
+  }
+
+  // ── Header ──
   let thead = '<tr>';
-  if (parentKey) thead += '<th>Parent Reason</th>';
-  thead += '<th style="text-align:left">Contact Reason</th>';
-  allWeeks.forEach(w => {
-    const d = new Date(w + 'T12:00:00');
-    const label = isNaN(d) ? w : `${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
-    thead += `<th colspan="2" class="group-header">${label}</th>`;
+  if (parentKey) thead += '<th style="text-align:left;min-width:140px">Parent Reason</th>';
+  thead += '<th style="text-align:left;min-width:200px">Contact Reason</th>';
+  displayWeeks.forEach(w => {
+    const wn   = _crWeekNum(w);
+    const sun  = _parseWS(w);
+    const sunLbl = sun ? `${sun.getMonth()+1}/${sun.getDate()}` : w;
+    thead += `<th colspan="2" class="group-header">W${wn} <span style="font-weight:400;opacity:.7">(${sunLbl})</span></th>`;
   });
   thead += '</tr><tr>';
   if (parentKey) thead += '<th></th>';
   thead += '<th></th>';
-  allWeeks.forEach(() => { thead += '<th>Count</th><th>Share%</th>'; });
+  displayWeeks.forEach(() => { thead += '<th style="min-width:60px">Count</th><th style="min-width:72px">Share%</th>'; });
   thead += '</tr>';
   tbl.querySelector('thead').innerHTML = thead;
 
-  // Sort rows by total count desc
-  const rows = Object.entries(map).sort((a, b) => {
-    const ta = allWeeks.reduce((s, w) => s + (a[1][w] || 0), 0);
-    const tb = allWeeks.reduce((s, w) => s + (b[1][w] || 0), 0);
-    return tb - ta;
-  });
+  // ── Sort by most recent week count desc ──
+  const lastW = displayWeeks[displayWeeks.length - 1];
+  const rows = Object.entries(map).sort((a, b) => (b[1][lastW]||0) - (a[1][lastW]||0));
 
+  // ── Body ──
   let tbody = '';
   rows.forEach(([lbl, rec]) => {
     tbody += '<tr>';
     if (parentKey) tbody += `<td style="text-align:left;font-size:11px;color:var(--mid)">${rec.parentReason || ''}</td>`;
-    tbody += `<td style="text-align:left;font-weight:600;min-width:220px">${lbl}</td>`;
-    allWeeks.forEach(w => {
+    tbody += `<td style="text-align:left;font-weight:600">${lbl}</td>`;
+    displayWeeks.forEach((w, wi) => {
       const cnt = rec[w] || 0;
       const tot = weekTotals[w] || 0;
       const pct = tot ? (cnt / tot * 100) : 0;
-      tbody += `<td>${cnt ? fmtN(cnt) : '-'}</td><td style="color:var(--mid)">${cnt ? fmtPct(pct) : '-'}</td>`;
+      const cls = cnt ? wowColor(lbl, wi) : '';
+      tbody += `<td>${cnt ? fmtN(cnt) : '-'}</td>`;
+      tbody += `<td class="${cls}">${cnt ? fmtPct(pct) : '-'}</td>`;
     });
     tbody += '</tr>';
   });
 
-  // Totals row
-  tbody += '<tr style="background:#E0F2FE;font-weight:700">';
+  // ── Totals row ──
+  tbody += '<tr style="background:#FFF0E6;font-weight:700">';
   if (parentKey) tbody += '<td></td>';
-  tbody += '<td style="text-align:left">TOTAL</td>';
-  allWeeks.forEach(w => {
+  tbody += '<td style="text-align:left;color:var(--brand)">TOTAL</td>';
+  displayWeeks.forEach(w => {
     tbody += `<td>${fmtN(weekTotals[w])}</td><td>100%</td>`;
   });
   tbody += '</tr>';
