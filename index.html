@@ -1227,23 +1227,30 @@ async function doUpload(type) {
 // ─── CSV PARSERS ─────────────────────────────────────────────────────────────
 
 // Format 1: Only Inbound — wide format with DAILY date columns
-// Header: "Breakdown I", "Breakdown II", "01-Oct-25", "02-Oct-25", ...
-// Rows:  channel, "Total", val1, val2, ...
+// Variant A (UTF-16 TSV): "Breakdown I \t Breakdown II \t date1 \t ..."  rows: "channel \t Total \t v1..."
+// Variant B (UTF-8 CSV):  "Breakdown I,date1,date2,..."                  rows: "channel,v1,v2,..."
 // Aggregates daily columns into weekly records (and carries date for daily use)
 function parseOnlyInboundCSV(text) {
-  // Support both TSV and CSV (file is usually TSV/UTF-16)
   const sep = text.includes('\t') ? '\t' : ',';
   const lines = sep === '\t' ? parseTSV(text, '\t') : parseCSV(text);
   if (lines.length < 2) return [];
   const header = lines[0];
-  // Dates start at col 2
-  const dailyDates = header.slice(2).map(h => parseFlexDate((h||'').trim()));
+
+  // Detect format: if header[1] looks like a date → Variant B (1 prefix col, no "Total")
+  // Otherwise Variant A (2 prefix cols, "Total" in col 1)
+  const h1 = (header[1]||'').trim();
+  const variantB = !!parseFlexDate(h1);  // true when col 1 is a date
+  const dataOffset = variantB ? 1 : 2;   // where daily values start
+
+  const dailyDates = header.slice(dataOffset).map(h => parseFlexDate((h||'').trim()));
   const cdata = {};
   for (let i = 1; i < lines.length; i++) {
     const row = lines[i];
-    const ch = (row[0]||'').trim().toLowerCase().replace(/\s+/g,'-');
-    if (!ch || (row[1]||'').trim().toLowerCase() !== 'total') continue;
-    cdata[ch] = row.slice(2).map(v => parseFloat(String(v||'').replace(/,/g,''))||0);
+    const ch = (row[0]||'').trim().toLowerCase().replace(/[\s_]+/g,'-');
+    if (!ch) continue;
+    // Variant A requires col 1 === "total"; Variant B has no such label
+    if (!variantB && (row[1]||'').trim().toLowerCase() !== 'total') continue;
+    cdata[ch] = row.slice(dataOffset).map(v => parseFloat(String(v||'').replace(/,/g,''))||0);
   }
   // ── Build daily records, then aggregate into weekly ──
   const weekMap = {}; // weekStart → { chatOnly, emailOnly, totalOnly, days:[] }
