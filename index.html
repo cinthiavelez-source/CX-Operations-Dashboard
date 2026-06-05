@@ -709,7 +709,9 @@ function getWeeklyData() {
   return rows;
 }
 
-function fKey(week, weekStart) { return `${week}|${weekStart}`; }
+// Strip ISO timestamp suffix so "2026-01-05T05:00:00.000Z" and "2026-01-05T17:00:00.000Z" both → "2026-01-05"
+function _normWS(ws) { const s = String(ws||''); return s.includes('T') ? s.split('T')[0] : s; }
+function fKey(week, weekStart) { return `${week}|${_normWS(weekStart)}`; }
 
 function getMonthlyData() {
   const weeks = getWeeklyData();
