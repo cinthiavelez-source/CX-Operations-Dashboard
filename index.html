@@ -248,7 +248,8 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <div class="upload-card highlight">
       <div class="format-badge">WEEKLY</div>
       <h3>📥 Inbound — Only Inbound</h3>
-      <p>Wide-format CSV with channels as rows and week dates as columns.<br>
+      <p>Wide-format CSV with channels as rows and <strong>daily dates as columns</strong>.<br>
+         Automatically aggregates into weeks &amp; months for the tracker.<br>
          Channels: <strong>sms + chat → Live</strong> | all others → Email</p>
       <div class="upload-zone" id="zone-only" ondragover="dragOver(event,'zone-only')" ondragleave="dragLeave('zone-only')" ondrop="dropFile(event,'only-inbound')">
         <input type="file" accept=".csv" id="file-only" onchange="fileChosen(event,'only-inbound')">
@@ -1196,7 +1197,19 @@ async function doUpload(type) {
   try {
     const res = await apiPost({ action, records });
     if (res.error) throw new Error(res.error);
-    showToast(`✅ Uploaded: ${res.added||0} added, ${res.updated||0} updated`, '#10B981');
+    let msg = `✅ Uploaded: ${res.added||0} added, ${res.updated||0} updated`;
+
+    // For Only Inbound: also upload the daily breakdown to Daily_Inbound sheet
+    if (type === 'only-inbound' && parseOnlyInboundCSV._daily && parseOnlyInboundCSV._daily.length) {
+      const dailyRecs = parseOnlyInboundCSV._daily;
+      showLoading(true, `Uploading ${dailyRecs.length} daily records…`);
+      const res2 = await apiPost({ action: 'uploadInboundD', records: dailyRecs });
+      if (res2.error) throw new Error(res2.error);
+      msg += ` | Daily: ${res2.added||0} added, ${res2.updated||0} updated`;
+      parseOnlyInboundCSV._daily = null;
+    }
+
+    showToast(msg, '#10B981');
     clearUpload(type);
     // Refresh data
     await apiFetch();
@@ -1211,35 +1224,56 @@ async function doUpload(type) {
 
 // ─── CSV PARSERS ─────────────────────────────────────────────────────────────
 
-// Format 1: Only Inbound — wide format
-// Header: "Breakdown I", "Breakdown II", "15-Mar-26", "22-Mar-26", ...
+// Format 1: Only Inbound — wide format with DAILY date columns
+// Header: "Breakdown I", "Breakdown II", "01-Oct-25", "02-Oct-25", ...
 // Rows:  channel, "Total", val1, val2, ...
+// Aggregates daily columns into weekly records (and carries date for daily use)
 function parseOnlyInboundCSV(text) {
-  const lines = parseCSV(text);
+  // Support both TSV and CSV (file is usually TSV/UTF-16)
+  const sep = text.includes('\t') ? '\t' : ',';
+  const lines = sep === '\t' ? parseTSV(text, '\t') : parseCSV(text);
   if (lines.length < 2) return [];
   const header = lines[0];
-  const weekDates = header.slice(2).map(h => parseFlexDate(h.trim()));
+  // Dates start at col 2
+  const dailyDates = header.slice(2).map(h => parseFlexDate((h||'').trim()));
   const cdata = {};
   for (let i = 1; i < lines.length; i++) {
     const row = lines[i];
     const ch = (row[0]||'').trim().toLowerCase().replace(/\s+/g,'-');
-    if (!ch || row[1]?.trim().toLowerCase() !== 'total') continue;
-    cdata[ch] = row.slice(2).map(v => parseFloat(String(v).replace(/,/g,''))||0);
+    if (!ch || (row[1]||'').trim().toLowerCase() !== 'total') continue;
+    cdata[ch] = row.slice(2).map(v => parseFloat(String(v||'').replace(/,/g,''))||0);
   }
-  const results = [];
-  weekDates.forEach((dateStr, idx) => {
+  // ── Build daily records, then aggregate into weekly ──
+  const weekMap = {}; // weekStart → { chatOnly, emailOnly, totalOnly, days:[] }
+  const dailyRecords = [];
+  dailyDates.forEach((dateStr, idx) => {
     if (!dateStr) return;
     const live  = (cdata['sms']?.[idx]||0) + (cdata['chat']?.[idx]||0);
     const email = (cdata['email']?.[idx]||0) + (cdata['facebook']?.[idx]||0) +
                   (cdata['instagram']?.[idx]||0) + (cdata['twitter-dm']?.[idx]||0) +
                   (cdata['twitter_direct_message']?.[idx]||0);
     const total = live + email;
-    if (!total) return;
-    const d = new Date(dateStr+'T12:00:00');
-    results.push({ week: isoWeek(d), weekStart: weekStartMon(d),
+    if (!total && !live && !email) return;
+    const d   = new Date(dateStr+'T12:00:00');
+    const ws  = weekStartMon(d);
+    const wk  = isoWeek(d);
+    // Accumulate into weekly bucket
+    if (!weekMap[ws]) weekMap[ws] = { week:wk, weekStart:ws, chatOnly:0, emailOnly:0, totalOnly:0 };
+    weekMap[ws].chatOnly  += live;
+    weekMap[ws].emailOnly += email;
+    weekMap[ws].totalOnly += total;
+    // Also store daily detail for the daily tracker
+    dailyRecords.push({ date:dateStr, week:wk, weekStart:ws,
       chatOnly:live, emailOnly:email, totalOnly:total,
       chatTotal:'', emailTotal:'', totalTotal:'' });
   });
+  // Weekly records (schema used by getWeeklyData)
+  const results = Object.values(weekMap).map(w => ({
+    ...w, chatTotal:'', emailTotal:'', totalTotal:''
+  }));
+  results.sort((a,b)=>a.weekStart.localeCompare(b.weekStart));
+  // Attach daily breakdown so getDailyData can use it
+  parseOnlyInboundCSV._daily = dailyRecords;
   return results;
 }
 
