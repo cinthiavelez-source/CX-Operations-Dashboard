@@ -794,9 +794,10 @@ function getDailyData(year, month) {
   const weeks = getWeeklyData();
   const { inboundD, forecastsD } = cachedData;
   const solvedMap = {}, inboundDMap = {}, dailyFcstMap = {};
-  cachedData.solved.forEach(s => { solvedMap[s.date] = s; });
-  inboundD.forEach(d => { inboundDMap[d.date] = d; });
-  forecastsD.forEach(f => { dailyFcstMap[f.date] = f; });
+  // Normalize date keys: Sheets returns ISO timestamps ("2026-06-01T04:00:00.000Z") for date fields
+  cachedData.solved.forEach(s => { solvedMap[_normWS(s.date)] = s; });
+  inboundD.forEach(d => { inboundDMap[_normWS(d.date)] = d; });
+  forecastsD.forEach(f => { dailyFcstMap[_normWS(f.date)] = f; });
 
   const daysInMonth = new Date(year, month+1, 0).getDate();
   const allDays = [];
@@ -826,7 +827,7 @@ function getDailyData(year, month) {
       date: dateStr, dow,
       dayName: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow],
       weekNum: weekRow ? weekRow.week : isoWeek(date),
-      weekStart: weekRow ? weekRow.weekStart : weekStartMon(date),
+      weekStart: weekRow ? weekRow.weekStart : weekStartMonStr(date),
       weekRow,
       chatFCST: dailyChatFCST,   emailFCST: dailyEmailFCST,   totalFCST: dailyFCST,
       chatSolved: sv.chatSolved  ? n(sv.chatSolved)  : null,
@@ -984,7 +985,7 @@ function renderTracker() {
     return;
   }
 
-  const hasDailyInb = cachedData.inboundD.some(d => d.date && d.date.startsWith(`${trackerYear}-${pad(trackerMonth+1)}`));
+  const hasDailyInb = cachedData.inboundD.some(d => d.date && _normWS(d.date).startsWith(`${trackerYear}-${pad(trackerMonth+1)}`));
 
   let html = '';
   groups.forEach(grp => {
@@ -1050,23 +1051,33 @@ function renderLogKPI() {
   const weeks = getWeeklyData();
   const existing = sel.value;
   sel.innerHTML = '<option value="">— choose a week —</option>';
-  // Build list from all weeks we have any data for, plus next 4 upcoming
+
+  // Build full week list: all weeks from data + fill any gaps from W1 of current year to W+4 ahead
   const allWeeks = [...weeks];
-  // Add current + next 4 weeks if not already there
   const today = new Date();
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(today); d.setDate(d.getDate() - d.getDay() + 1 + i*7);
+  const curYear = today.getFullYear();
+  // Ensure every week from W1 of current year through current week + 4 is represented
+  for (let wk = 1; wk <= 56; wk++) {
+    const d  = isoWeekToMon(curYear, wk);
     const ws = d.toISOString().split('T')[0];
-    const wn = isoWeek(d);
-    if (!allWeeks.find(w => w.weekStart === ws)) {
-      allWeeks.push({ week:wn, weekStart:ws, month: monthFromDate(ws) });
+    if (!allWeeks.find(w => _normWS(w.weekStart) === ws)) {
+      allWeeks.push({ week:wk, weekStart:ws, month: monthFromDate(ws) });
     }
   }
-  allWeeks.sort((a,b)=>(a.weekStart||'').localeCompare(b.weekStart||''));
-  allWeeks.slice(-20).forEach(w => {
+  allWeeks.sort((a,b) => _normWS(a.weekStart||'').localeCompare(_normWS(b.weekStart||'')));
+
+  // Find current week position, then show 30 past weeks + 4 future
+  const todayStr = today.toISOString().split('T')[0];
+  const curIdx = allWeeks.findIndex(w => _normWS(w.weekStart) >= todayStr);
+  const pivot  = curIdx >= 0 ? curIdx : allWeeks.length - 1;
+  const start  = Math.max(0, pivot - 30);
+  const end    = Math.min(allWeeks.length, pivot + 5);
+
+  allWeeks.slice(start, end).forEach(w => {
+    const ws = _normWS(w.weekStart);
     const opt = document.createElement('option');
-    opt.value = JSON.stringify({week:w.week,weekStart:w.weekStart,month:w.month});
-    opt.textContent = `W${w.week} — ${fmtDate(w.weekStart)} (${w.month||''})`;
+    opt.value = JSON.stringify({ week:w.week, weekStart:ws, month:w.month });
+    opt.textContent = `W${w.week} — ${fmtDate(ws)} (${w.month||''})`;
     sel.appendChild(opt);
   });
   if (existing) sel.value = existing;
