@@ -656,12 +656,22 @@ async function navTo(page) {
 
 // ─── DATA COMPUTATION ────────────────────────────────────────────────────────
 function getWeeklyData() {
-  const { forecasts, inbound, solved, weeklyKPI } = cachedData;
+  const { forecasts, inbound, inboundD, solved, weeklyKPI } = cachedData;
   const fmap = {}, imap = {}, kmap = {}, svWeek = {};
 
   forecasts.forEach(f => { fmap[fKey(f.week, f.weekStart)] = f; });
+  // Legacy weekly inbound records (if any remain in sheet)
   inbound.forEach(i => { imap[fKey(i.week, i.weekStart)] = i; });
   weeklyKPI.forEach(k => { kmap[fKey(k.week, k.weekStart)] = k; });
+
+  // Aggregate daily inbound (from Only Inbound uploads) → weekly buckets
+  inboundD.forEach(d => {
+    const key = fKey(d.week, d.weekStart);
+    if (!imap[key]) imap[key] = { chatOnly:0, emailOnly:0, totalOnly:0, chatTotal:'', emailTotal:'', totalTotal:'' };
+    imap[key].chatOnly  = (imap[key].chatOnly  || 0) + n(d.chatOnly);
+    imap[key].emailOnly = (imap[key].emailOnly || 0) + n(d.emailOnly);
+    imap[key].totalOnly = (imap[key].totalOnly || 0) + n(d.totalOnly);
+  });
 
   // Aggregate daily solved → weekly
   solved.forEach(s => {
@@ -1191,7 +1201,7 @@ async function doUpload(type) {
   const records = parsedFiles[type];
   if (!records || !records.length) { showToast('No records to upload', '#F59E0B'); return; }
   const actionMap = {
-    'only-inbound':      { action:'uploadInbound',         key:'records' },
+    'only-inbound':      { action:'uploadInboundD',        key:'records' },
     'inbound-total':     { action:'uploadInbound',         key:'records' },
     'solved':            { action:'uploadSolved',          key:'records' },
     'inbound-daily':     { action:'uploadInboundD',        key:'records' },
@@ -1206,19 +1216,7 @@ async function doUpload(type) {
   try {
     const res = await apiPost({ action, records });
     if (res.error) throw new Error(res.error);
-    let msg = `✅ Uploaded: ${res.added||0} added, ${res.updated||0} updated`;
-
-    // For Only Inbound: also upload the daily breakdown to Daily_Inbound sheet
-    if (type === 'only-inbound' && parseOnlyInboundCSV._daily && parseOnlyInboundCSV._daily.length) {
-      const dailyRecs = parseOnlyInboundCSV._daily;
-      showLoading(true, `Uploading ${dailyRecs.length} daily records…`);
-      const res2 = await apiPost({ action: 'uploadInboundD', records: dailyRecs });
-      if (res2.error) throw new Error(res2.error);
-      msg += ` | Daily: ${res2.added||0} added, ${res2.updated||0} updated`;
-      parseOnlyInboundCSV._daily = null;
-    }
-
-    showToast(msg, '#10B981');
+    showToast(`✅ Uploaded: ${res.added||0} added, ${res.updated||0} updated`, '#10B981');
     clearUpload(type);
     // Refresh data
     await apiFetch();
@@ -1259,9 +1257,8 @@ function parseOnlyInboundCSV(text) {
     if (!variantB && (row[1]||'').trim().toLowerCase() !== 'total') continue;
     cdata[ch] = row.slice(dataOffset).map(v => parseFloat(String(v||'').replace(/,/g,''))||0);
   }
-  // ── Build daily records, then aggregate into weekly ──
-  const weekMap = {}; // weekStart → { chatOnly, emailOnly, totalOnly, days:[] }
-  const dailyRecords = [];
+  // ── Build one daily record per date ──
+  const results = [];
   dailyDates.forEach((dateStr, idx) => {
     if (!dateStr) return;
     const live  = (cdata['sms']?.[idx]||0) + (cdata['chat']?.[idx]||0);
@@ -1270,26 +1267,14 @@ function parseOnlyInboundCSV(text) {
                   (cdata['twitter_direct_message']?.[idx]||0);
     const total = live + email;
     if (!total && !live && !email) return;
-    const d   = new Date(dateStr+'T12:00:00');
-    const ws  = weekStartMonStr(d);   // string "YYYY-MM-DD", not Date object
-    const wk  = isoWeek(d);
-    // Accumulate into weekly bucket
-    if (!weekMap[ws]) weekMap[ws] = { week:wk, weekStart:ws, chatOnly:0, emailOnly:0, totalOnly:0 };
-    weekMap[ws].chatOnly  += live;
-    weekMap[ws].emailOnly += email;
-    weekMap[ws].totalOnly += total;
-    // Also store daily detail for the daily tracker
-    dailyRecords.push({ date:dateStr, week:wk, weekStart:ws,
+    const d  = new Date(dateStr+'T12:00:00');
+    const ws = weekStartMonStr(d);
+    const wk = isoWeek(d);
+    results.push({ date:dateStr, week:wk, weekStart:ws,
       chatOnly:live, emailOnly:email, totalOnly:total,
       chatTotal:'', emailTotal:'', totalTotal:'' });
   });
-  // Weekly records (schema used by getWeeklyData)
-  const results = Object.values(weekMap).map(w => ({
-    ...w, chatTotal:'', emailTotal:'', totalTotal:''
-  }));
-  results.sort((a,b)=>a.weekStart.localeCompare(b.weekStart));
-  // Attach daily breakdown so getDailyData can use it
-  parseOnlyInboundCSV._daily = dailyRecords;
+  results.sort((a,b) => a.date.localeCompare(b.date));
   return results;
 }
 
