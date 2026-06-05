@@ -1148,15 +1148,22 @@ function processUploadFile(file, type) {
     const year = type === 'forecast'       ? (parseInt(document.getElementById('fcst-year').value)||2026)
               : type === 'forecast-daily'  ? (parseInt(document.getElementById('fcst-daily-year').value)||2026)
               : 2026;
-    if (type === 'only-inbound')      records = parseOnlyInboundCSV(text, year);
-    if (type === 'inbound-total')     records = parseInboundTotalCSV(text, year);
-    if (type === 'solved')            records = parseDailyChannelCSV(text, 'solved');
-    if (type === 'inbound-daily')     records = parseDailyChannelCSV(text, 'inbound');
-    if (type === 'forecast')          records = parseForecastCSV(text, year);
-    if (type === 'forecast-daily')    records = parseDailyForecastCSV(text, year);
-    if (type === 'forecast-monthly')  records = parseMonthlyForecastCSV(text);
-    if (type === 'cr')                records = parseContactReasonCSV(text, 'cr');
-    if (type === 'subcr')             records = parseContactReasonCSV(text, 'subcr');
+    try {
+      if (type === 'only-inbound')      records = parseOnlyInboundCSV(text, year);
+      if (type === 'inbound-total')     records = parseInboundTotalCSV(text, year);
+      if (type === 'solved')            records = parseDailyChannelCSV(text, 'solved');
+      if (type === 'inbound-daily')     records = parseDailyChannelCSV(text, 'inbound');
+      if (type === 'forecast')          records = parseForecastCSV(text, year);
+      if (type === 'forecast-daily')    records = parseDailyForecastCSV(text, year);
+      if (type === 'forecast-monthly')  records = parseMonthlyForecastCSV(text);
+      if (type === 'cr')                records = parseContactReasonCSV(text, 'cr');
+      if (type === 'subcr')             records = parseContactReasonCSV(text, 'subcr');
+    } catch(parseErr) {
+      records = [];
+      const preview2 = document.getElementById('preview-'+type);
+      if (preview2) { preview2.style.display='block'; preview2.textContent='❌ Parse error: '+parseErr.message; }
+      return;
+    }
     parsedFiles[type] = records;
     const preview = document.getElementById('preview-'+type);
     if (preview) {
@@ -1264,7 +1271,7 @@ function parseOnlyInboundCSV(text) {
     const total = live + email;
     if (!total && !live && !email) return;
     const d   = new Date(dateStr+'T12:00:00');
-    const ws  = weekStartMon(d);
+    const ws  = weekStartMonStr(d);   // string "YYYY-MM-DD", not Date object
     const wk  = isoWeek(d);
     // Accumulate into weekly bucket
     if (!weekMap[ws]) weekMap[ws] = { week:wk, weekStart:ws, chatOnly:0, emailOnly:0, totalOnly:0 };
