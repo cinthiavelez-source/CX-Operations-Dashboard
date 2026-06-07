@@ -826,8 +826,8 @@ function getDailyData(year, month) {
     allDays.push({
       date: dateStr, dow,
       dayName: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dow],
-      weekNum: weekRow ? weekRow.week : isoWeek(date),
-      weekStart: weekRow ? weekRow.weekStart : weekStartMonStr(date),
+      weekNum: weekRow ? weekRow.week : isoWeekSun(date),
+      weekStart: weekRow ? weekRow.weekStart : weekStartSunStr(date),
       weekRow,
       chatFCST: dailyChatFCST,   emailFCST: dailyEmailFCST,   totalFCST: dailyFCST,
       chatSolved: sv.chatSolved  ? n(sv.chatSolved)  : null,
@@ -1058,7 +1058,7 @@ function renderLogKPI() {
   const curYear = today.getFullYear();
   // Ensure every week from W1 of current year through current week + 4 is represented
   for (let wk = 1; wk <= 56; wk++) {
-    const d  = isoWeekToMon(curYear, wk);
+    const d  = isoWeekToSun(curYear, wk);
     const ws = d.toISOString().split('T')[0];
     if (!allWeeks.find(w => _normWS(w.weekStart) === ws)) {
       allWeeks.push({ week:wk, weekStart:ws, month: monthFromDate(ws) });
@@ -1279,8 +1279,8 @@ function parseOnlyInboundCSV(text) {
     const total = live + email;
     if (!total && !live && !email) return;
     const d  = new Date(dateStr+'T12:00:00');
-    const ws = weekStartMonStr(d);
-    const wk = isoWeek(d);
+    const ws = weekStartSunStr(d);
+    const wk = isoWeekSun(d);
     results.push({ date:dateStr, week:wk, weekStart:ws,
       chatOnly:live, emailOnly:email, totalOnly:total,
       chatTotal:'', emailTotal:'', totalTotal:'' });
@@ -1314,7 +1314,7 @@ function parseInboundTotalCSV(text, year=2026) {
     const email = Object.entries(channels).filter(([c])=>c!=='Twilio SMS'&&c!=='Messaging')
       .reduce((s,[,v])=>s+v,0);
     const total = live + email;
-    const d = isoWeekToMon(year, parseInt(wk));
+    const d = isoWeekToSun(year, parseInt(wk));
     const ws = d.toISOString().split('T')[0];
     results.push({ week:parseInt(wk), weekStart:ws,
       chatOnly:'', emailOnly:'', totalOnly:'',
@@ -1346,12 +1346,12 @@ function parseDailyChannelCSV(text, mode='solved') {
       .reduce((s,[,v])=>s+v,0);
     const total = live + email;
     const d = new Date(date+'T12:00:00');
-    const ws = weekStartMon(d);
+    const ws = weekStartSunStr(d);
     if (mode==='solved') {
-      results.push({ date, week:isoWeek(d), weekStart:ws,
+      results.push({ date, week:isoWeekSun(d), weekStart:ws,
         chatSolved:live, emailSolved:email, totalSolved:total });
     } else {
-      results.push({ date, week:isoWeek(d), weekStart:ws,
+      results.push({ date, week:isoWeekSun(d), weekStart:ws,
         chatOnly:live, emailOnly:email, totalOnly:total,
         chatTotal:'', emailTotal:'', totalTotal:'' });
     }
@@ -1381,7 +1381,7 @@ function parseForecastCSV(text, year=2026) {
     const chatFCST  = live + some;
     const emailFCST = email;
     const totalFCST = live + some + email;
-    const d  = isoWeekToMon(year, wkNum);
+    const d  = isoWeekToSun(year, wkNum);
     const ws = d.toISOString().split('T')[0];
     results.push({ week: wkNum, weekStart: ws, month: monthFromDate(ws),
       chatFCST, emailFCST, totalFCST });
@@ -1414,9 +1414,9 @@ function parseDailyForecastCSV(text, year=2026) {
     const chatFCST  = live + some;
     const emailFCST = email;
     const dateStr = adj.toISOString().split('T')[0];
-    const ws = weekStartMon(adj);
+    const ws = weekStartSunStr(adj);
     const wkMatch = wCol.match(/^[Ww](\d+)$/);
-    const wkNum = wkMatch ? parseInt(wkMatch[1]) : isoWeek(adj);
+    const wkNum = wkMatch ? parseInt(wkMatch[1]) : isoWeekSun(adj);
     results.push({ date:dateStr, week:wkNum, weekStart:ws,
       chatFCST, emailFCST, totalFCST:chatFCST+emailFCST });
   }
@@ -1795,7 +1795,7 @@ function isoWeek(d) {
   return 1 + Math.round(((date-w1)/86400000 - 3 + (w1.getDay()+6)%7)/7);
 }
 
-// Get Monday of the ISO week for a date
+// Get Monday of the ISO week for a date (kept for internal use)
 function weekStartMon(d) {
   const date = typeof d === 'string' ? new Date(d+'T12:00:00') : new Date(+d);
   date.setHours(12,0,0,0);
@@ -1805,6 +1805,30 @@ function weekStartMon(d) {
   return date;
 }
 function weekStartMonStr(d) { return weekStartMon(d).toISOString().split('T')[0]; }
+
+// ── CookUnity weeks: Sunday → Saturday ──
+// Get the Sunday that starts the Sun-Sat week containing date d
+function weekStartSun(d) {
+  const date = typeof d === 'string' ? new Date(d+'T12:00:00') : new Date(+d);
+  date.setHours(12,0,0,0);
+  date.setDate(date.getDate() - date.getDay()); // getDay() 0=Sun → stays, 1=Mon → -1, etc.
+  return date;
+}
+function weekStartSunStr(d) { return weekStartSun(d).toISOString().split('T')[0]; }
+
+// Week number of the Sun-Sat week = ISO week number of its Monday (Sun+1)
+function isoWeekSun(d) {
+  const sun = weekStartSun(d);
+  const mon = new Date(sun); mon.setDate(sun.getDate() + 1);
+  return isoWeek(mon);
+}
+
+// Get the Sunday of ISO week wk in year yr
+function isoWeekToSun(yr, wk) {
+  const mon = isoWeekToMon(yr, wk);
+  const sun = new Date(mon); sun.setDate(mon.getDate() - 1);
+  return sun;
+}
 
 // Get the Monday of ISO week wk in year yr
 function isoWeekToMon(yr, wk) {
