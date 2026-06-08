@@ -98,6 +98,21 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
 .empty-state p{font-size:15px;margin-bottom:8px}
 .empty-state small{font-size:12px}
 
+/* ── FORMAT BOX ── */
+.fmt-box{margin:8px 0 4px;border:1px solid var(--border);border-radius:7px;overflow:hidden;font-size:11px}
+.fmt-box summary{padding:6px 10px;background:#F8FAFC;cursor:pointer;font-weight:700;color:var(--mid);list-style:none;display:flex;align-items:center;gap:6px;user-select:none}
+.fmt-box summary::-webkit-details-marker{display:none}
+.fmt-box summary::after{content:'▸';margin-left:auto;transition:transform .2s}
+.fmt-box[open] summary::after{transform:rotate(90deg)}
+.fmt-box-body{padding:8px 10px;background:#fff}
+.fmt-tbl{width:100%;border-collapse:collapse;font-size:10.5px}
+.fmt-tbl th{background:#24272A;color:#fff;padding:3px 6px;text-align:left;white-space:nowrap;font-weight:600}
+.fmt-tbl td{padding:3px 6px;border-bottom:1px solid #F1F5F9;white-space:nowrap;color:var(--dark)}
+.fmt-tbl tr:last-child td{border-bottom:none}
+.fmt-tbl td.dim{color:var(--light);font-style:italic}
+.fmt-dl{display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:5px;font-size:11px;font-weight:600;color:var(--mid);cursor:pointer;text-decoration:none}
+.fmt-dl:hover{background:var(--border)}
+
 /* ── UPLOAD GRID ── */
 .upload-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
 .upload-card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.07);border:2px solid var(--border)}
@@ -248,9 +263,20 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <div class="upload-card highlight">
       <div class="format-badge">WEEKLY</div>
       <h3>📥 Inbound — Only Inbound</h3>
-      <p>Wide-format CSV with channels as rows and <strong>daily dates as columns</strong>.<br>
-         Automatically aggregates into weeks &amp; months for the tracker.<br>
+      <p>Wide-format CSV with channels as rows and <strong>daily dates as columns</strong>. Aggregates into weeks &amp; months automatically.<br>
          Channels: <strong>sms + chat → Live</strong> | all others → Email</p>
+      <details class="fmt-box">
+        <summary>📋 Expected format</summary>
+        <div class="fmt-box-body">
+          <table class="fmt-tbl"><thead><tr><th>Breakdown I</th><th>01-Jan-26</th><th>02-Jan-26</th><th>...</th></tr></thead>
+          <tbody><tr><td>chat</td><td>456</td><td>371</td><td class="dim">…</td></tr>
+          <tr><td>email</td><td>1,471</td><td>1,301</td><td class="dim">…</td></tr>
+          <tr><td>sms</td><td>338</td><td>315</td><td class="dim">…</td></tr>
+          <tr><td>facebook</td><td>3</td><td>3</td><td class="dim">…</td></tr>
+          <tr><td>instagram</td><td>15</td><td>10</td><td class="dim">…</td></tr></tbody></table>
+          <a class="fmt-dl" onclick="dlTemplate('only_inbound_template.csv','Breakdown I,01-Jan-26,02-Jan-26,03-Jan-26\nchat,456,371,267\nemail,1471,1301,1015\nsms,338,315,288\nfacebook,3,3,4\ninstagram,15,10,12\ntwitter-dm,0,0,1\n')">📥 Download template</a>
+        </div>
+      </details>
       <div class="upload-zone" id="zone-only" ondragover="dragOver(event,'zone-only')" ondragleave="dragLeave('zone-only')" ondrop="dropFile(event,'only-inbound')">
         <input type="file" accept=".csv" id="file-only" onchange="fileChosen(event,'only-inbound')">
         <div class="uf-icon">📂</div>
@@ -270,6 +296,16 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
       <h3>📥 Inbound — Including Outbound</h3>
       <p>Long-format CSV with Ticket channel, Week of Year, Tickets columns.<br>
          <strong>Twilio SMS + Messaging → Live</strong> | all others → Email</p>
+      <details class="fmt-box">
+        <summary>📋 Expected format</summary>
+        <div class="fmt-box-body">
+          <table class="fmt-tbl"><thead><tr><th>Ticket channel</th><th>Ticket created - Week of Year</th><th>Tickets</th></tr></thead>
+          <tbody><tr><td>Twilio SMS</td><td>1</td><td>338</td></tr>
+          <tr><td>Messaging</td><td>1</td><td>456</td></tr>
+          <tr><td>Email</td><td>1</td><td>1,471</td></tr></tbody></table>
+          <a class="fmt-dl" onclick="dlTemplate('inbound_total_template.csv','Ticket channel,Ticket created - Week of Year,Tickets\nTwilio SMS,1,338\nMessaging,1,456\nEmail,1,1471\nTwilio SMS,2,290\nMessaging,2,412\nEmail,2,1388\n')">📥 Download template</a>
+        </div>
+      </details>
       <div class="upload-zone" id="zone-total" ondragover="dragOver(event,'zone-total')" ondragleave="dragLeave('zone-total')" ondrop="dropFile(event,'inbound-total')">
         <input type="file" accept=".csv" id="file-total" onchange="fileChosen(event,'inbound-total')">
         <div class="uf-icon">📂</div>
@@ -287,8 +323,18 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <div class="upload-card highlight">
       <div class="format-badge">DAILY</div>
       <h3>✅ Solved Tickets</h3>
-      <p>Daily CSV with Ticket channel, Ticket solved - Date, Solved tickets.<br>
-         Upload daily — <strong>Twilio SMS + Messaging → Live</strong></p>
+      <p>Daily CSV — one row per channel per day. Re-upload anytime; existing dates update, no duplicates.<br>
+         <strong>Twilio SMS + Messaging → Live</strong> | all others → Email</p>
+      <details class="fmt-box">
+        <summary>📋 Expected format</summary>
+        <div class="fmt-box-body">
+          <table class="fmt-tbl"><thead><tr><th>Ticket channel</th><th>Ticket solved - Date</th><th>Solved tickets</th></tr></thead>
+          <tbody><tr><td>Twilio SMS</td><td>2026-01-05</td><td>234</td></tr>
+          <tr><td>Messaging</td><td>2026-01-05</td><td>180</td></tr>
+          <tr><td>Email</td><td>2026-01-05</td><td>890</td></tr></tbody></table>
+          <a class="fmt-dl" onclick="dlTemplate('solved_tickets_template.csv','Ticket channel,Ticket solved - Date,Solved tickets\nTwilio SMS,2026-01-05,234\nMessaging,2026-01-05,180\nEmail,2026-01-05,890\nTwilio SMS,2026-01-06,198\nMessaging,2026-01-06,155\nEmail,2026-01-06,745\n')">📥 Download template</a>
+        </div>
+      </details>
       <div class="upload-zone" id="zone-solved" ondragover="dragOver(event,'zone-solved')" ondragleave="dragLeave('zone-solved')" ondrop="dropFile(event,'solved')">
         <input type="file" accept=".csv" id="file-solved" onchange="fileChosen(event,'solved')">
         <div class="uf-icon">📂</div>
@@ -306,8 +352,17 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <div class="upload-card">
       <div class="format-badge">DAILY (optional)</div>
       <h3>📥 Inbound — Daily Detail</h3>
-      <p>Optional: daily CSV with Ticket channel, Ticket created - Date, Tickets.<br>
-         Same format as Solved Tickets. Enables day-level inbound actuals in tracker.</p>
+      <p>Optional. Same structure as Solved Tickets but for inbound. Enables Chat Real / Email Real columns in the Daily Tracker.</p>
+      <details class="fmt-box">
+        <summary>📋 Expected format</summary>
+        <div class="fmt-box-body">
+          <table class="fmt-tbl"><thead><tr><th>Ticket channel</th><th>Ticket created - Date</th><th>Tickets</th></tr></thead>
+          <tbody><tr><td>Twilio SMS</td><td>2026-01-05</td><td>280</td></tr>
+          <tr><td>Messaging</td><td>2026-01-05</td><td>350</td></tr>
+          <tr><td>Email</td><td>2026-01-05</td><td>1,097</td></tr></tbody></table>
+          <a class="fmt-dl" onclick="dlTemplate('inbound_daily_template.csv','Ticket channel,Ticket created - Date,Tickets\nTwilio SMS,2026-01-05,280\nMessaging,2026-01-05,350\nEmail,2026-01-05,1097\nTwilio SMS,2026-01-06,240\nMessaging,2026-01-06,310\nEmail,2026-01-06,980\n')">📥 Download template</a>
+        </div>
+      </details>
       <div class="upload-zone" id="zone-inboundD" ondragover="dragOver(event,'zone-inboundD')" ondragleave="dragLeave('zone-inboundD')" ondrop="dropFile(event,'inbound-daily')">
         <input type="file" accept=".csv" id="file-inboundD" onchange="fileChosen(event,'inbound-daily')">
         <div class="uf-icon">📂</div>
@@ -325,8 +380,16 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <div class="upload-card">
       <div class="format-badge">FORECAST · WEEKLY</div>
       <h3>🎯 Weekly Forecast</h3>
-      <p>CSV with Week, Date, SMS, Chat, SoMe, Email columns — extracts the weekly total rows.<br>
-         <em>Inbound and HC - 2026 - Weekly &amp; Daily Forecast.csv</em></p>
+      <p>One row per ISO week (W1–W52). Re-upload anytime to update — matches by week number.</p>
+      <details class="fmt-box">
+        <summary>📋 Expected format</summary>
+        <div class="fmt-box-body">
+          <table class="fmt-tbl"><thead><tr><th>Week</th><th>SUM of Live_adj</th><th>SUM of Some_adj</th><th>SUM of Email_adj</th></tr></thead>
+          <tbody><tr><td>W1</td><td>3,370</td><td>126</td><td>3,940</td></tr>
+          <tr><td>W2</td><td>7,332</td><td>387</td><td>7,399</td></tr></tbody></table>
+          <a class="fmt-dl" onclick="dlTemplate('weekly_forecast_template.csv','Week,SUM of Live_adj,SUM of Some_adj,SUM of Email_adj\nW1,3370,126,3940\nW2,7332,387,7399\nW3,5054,452,9329\n')">📥 Download template</a>
+        </div>
+      </details>
       <div style="margin-bottom:10px">
         <label style="font-size:11px;font-weight:700;color:var(--mid);display:block;margin-bottom:4px">TARGET YEAR</label>
         <input type="number" id="fcst-year" value="2026" style="width:100px;padding:6px 10px;border:2px solid var(--border);border-radius:6px;font-size:13px">
@@ -348,8 +411,16 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <div class="upload-card highlight">
       <div class="format-badge">FORECAST · DAILY</div>
       <h3>📆 Daily Forecast</h3>
-      <p>Same CSV — extracts each individual day row for use in the Daily Tracker.<br>
-         <em>Inbound and HC - 2026 - Weekly &amp; Daily Forecast.csv</em></p>
+      <p>One row per day. Used to show daily FCST in the tracker. Re-upload updates existing dates.</p>
+      <details class="fmt-box">
+        <summary>📋 Expected format</summary>
+        <div class="fmt-box-body">
+          <table class="fmt-tbl"><thead><tr><th>Date</th><th>Week</th><th>SUM of Live_adj</th><th>SUM of Some_adj</th><th>SUM of Email_adj</th></tr></thead>
+          <tbody><tr><td>12/28/2025</td><td>W1</td><td>234</td><td>3</td><td>286</td></tr>
+          <tr><td>12/29/2025</td><td>W1</td><td>334</td><td>4</td><td>349</td></tr></tbody></table>
+          <a class="fmt-dl" onclick="dlTemplate('daily_forecast_template.csv','Date,Week,SUM of Live_adj,SUM of Some_adj,SUM of Email_adj\n12/28/2025,W1,234,3,286\n12/29/2025,W1,334,4,349\n12/30/2025,W1,373,3,529\n1/1/2026,W1,876,32,890\n')">📥 Download template</a>
+        </div>
+      </details>
       <div style="margin-bottom:10px">
         <label style="font-size:11px;font-weight:700;color:var(--mid);display:block;margin-bottom:4px">TARGET YEAR</label>
         <input type="number" id="fcst-daily-year" value="2026" style="width:100px;padding:6px 10px;border:2px solid var(--border);border-radius:6px;font-size:13px">
@@ -371,8 +442,17 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <div class="upload-card">
       <div class="format-badge">FORECAST · MONTHLY</div>
       <h3>📆 Monthly Forecast</h3>
-      <p>CSV with month rows and channel columns (SMS, Chat, SoMe, Email).<br>
-         <em>Inbound and HC - 2026 - Monthly forecast.csv</em></p>
+      <p>One row per month (Jan–Dec). Re-upload anytime — matches by month name, no duplicates.</p>
+      <details class="fmt-box">
+        <summary>📋 Expected format</summary>
+        <div class="fmt-box-body">
+          <table class="fmt-tbl"><thead><tr><th>Date - Month</th><th>SUM of Live_adj</th><th>SUM of Some_adj</th><th>SUM of Email_adj</th></tr></thead>
+          <tbody><tr><td>Jan</td><td>28,017</td><td>2,124</td><td>40,513</td></tr>
+          <tr><td>Feb</td><td>19,606</td><td>805</td><td>34,168</td></tr>
+          <tr><td>Mar</td><td>22,516</td><td>576</td><td>38,148</td></tr></tbody></table>
+          <a class="fmt-dl" onclick="dlTemplate('monthly_forecast_template.csv','Date - Month,SUM of Live_adj,SUM of Some_adj,SUM of Email_adj\nJan,28017,2124,40513\nFeb,19606,805,34168\nMar,22516,576,38148\nApr,23684,592,39662\nMay,21631,551,36188\nJun,21226,541,35818\nJul,24199,603,40300\nAug,25101,643,42398\nSep,25725,648,43292\nOct,24380,614,40528\nNov,21823,557,36883\nDec,23147,580,38845\n')">📥 Download template</a>
+        </div>
+      </details>
       <div class="upload-zone" id="zone-forecast-monthly" ondragover="dragOver(event,'zone-forecast-monthly')" ondragleave="dragLeave('zone-forecast-monthly')" ondrop="dropFile(event,'forecast-monthly')">
         <input type="file" accept=".csv" id="file-forecastmonthly" onchange="fileChosen(event,'forecast-monthly')">
         <div class="uf-icon">📂</div>
@@ -1127,6 +1207,16 @@ function clearKPIForm() {
   ['sla','frt','csat','csatRespRate','tphCU','tphBPO','hcNeeded','hcReal','pto'].forEach(f => {
     const el = document.getElementById('kpi-'+f); if(el) el.value='';
   });
+}
+
+// ─── TEMPLATE DOWNLOAD ───────────────────────────────────────────────────────
+function dlTemplate(filename, csvContent) {
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // ─── UPLOAD ──────────────────────────────────────────────────────────────────
