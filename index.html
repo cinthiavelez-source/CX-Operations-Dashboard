@@ -747,6 +747,15 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
       <input type="date" id="csat-f-to" onchange="snapCsatToWeek();renderCSATView()"
              style="padding:5px 8px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none">
       <button onclick="resetCsatFilters()" style="padding:6px 14px;border:2px solid var(--border);border-radius:7px;font-size:12px;background:#fff;cursor:pointer;font-weight:600;color:var(--mid)">Reset</button>
+      <span style="font-size:11px;color:var(--mid);white-space:nowrap;margin-left:8px;border-left:1px solid var(--border);padding-left:12px">Show</span>
+      <select id="csat-pivot-months" onchange="csatPivotMonths=+this.value||999;renderCSATView()"
+              style="padding:5px 8px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none;background:#fff">
+        <option value="3">Last 3 months</option>
+        <option value="4" selected>Last 4 months</option>
+        <option value="6">Last 6 months</option>
+        <option value="12">Last 12 months</option>
+        <option value="0">All months</option>
+      </select>
     </div>
     <!-- Week-range hint shown after date selection -->
     <div id="csat-date-hint" style="font-size:11px;color:var(--mid);margin-top:6px;display:none"></div>
@@ -1284,7 +1293,8 @@ function renderQuarterlyTable(tbl, summary) {
 }
 
 // ─── CSAT VIEW ────────────────────────────────────────────────────────────────
-let csatViewMode = 'weekly';
+let csatViewMode    = 'weekly';
+let csatPivotMonths = 4; // default: last 4 months shown in pivot columns
 
 function setCsatView(mode) {
   csatViewMode = mode;
@@ -1397,6 +1407,9 @@ function resetCsatFilters() {
   });
   const hint = document.getElementById('csat-date-hint');
   if (hint) hint.style.display = 'none';
+  csatPivotMonths = 4;
+  const pmSel = document.getElementById('csat-pivot-months');
+  if (pmSel) pmSel.value = '4';
   renderCSATView();
 }
 
@@ -1458,15 +1471,18 @@ function renderCSATView() {
     <div class="stat"><div class="stat-val">${s.resp != null ? fmtPct(s.resp) : '-'}</div><div class="stat-lbl">Response Rate%</div></div>`;
 
   const tbl = document.getElementById('csat-table');
+  tbl.style.tableLayout = ''; // reset — weekly view sets fixed, pivot views use auto
 
-  // ── Shared: get sorted month keys from a ticket set ──────────────────────
+  // ── Shared: get sorted month keys, capped to last N months ───────────────
   function _monthKeys(tkts) {
     const keys = new Set();
     tkts.forEach(t => {
       const ds = _normWS(t.date || t.weekStart || '');
       if (ds) keys.add(ds.slice(0, 7));
     });
-    return [...keys].sort();
+    const sorted = [...keys].sort();
+    const n = csatPivotMonths || 999;
+    return n >= sorted.length ? sorted : sorted.slice(-n);
   }
   function _mLabel(mk) {
     const [yr, mo] = mk.split('-');
@@ -1540,40 +1556,55 @@ function renderCSATView() {
       if(cp!=null&&pp!=null) fDelta=cp-pp;
     }
 
+    // Monthly totals across all dims (for share % per cell)
+    const monthTotal = {};
+    months.forEach(mk => { monthTotal[mk] = allAgg[mk]?.total || 0; });
+    const grandTotal = dimRows.reduce((s,r)=>s+r.vol,0);
+
+    // 3-metric cell: CSAT% badge + count + % share of month total
+    function _dimCell(v, mthTotal) {
+      if (!v || v.total===0) return `<td style="text-align:center;padding:5px 8px;color:var(--mid);font-size:11px">—</td>`;
+      const rated = v.good+v.bad;
+      const pct   = rated>0 ? v.good/rated*100 : null;
+      const share = mthTotal>0 ? v.total/mthTotal*100 : null;
+      return `<td style="text-align:center;padding:5px 8px;vertical-align:top">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+          ${_csatBadge(pct)}
+          <span style="font-size:10px;font-weight:600;color:var(--text)">${fmtN(v.total)}</span>
+          <span style="font-size:10px;color:var(--mid)">${share!=null?share.toFixed(1)+'%':'—'}</span>
+        </div>
+      </td>`;
+    }
+
     const pivotStyle = `border-left:1px solid var(--border)`;
     tbl.querySelector('thead').innerHTML = `<tr>
       <th style="text-align:left;min-width:130px">${label}</th>
-      ${months.map(mk=>`<th style="text-align:center">${_mLabel(mk)}</th>`).join('')}
+      ${months.map(mk=>`<th style="text-align:center;min-width:80px"><div>${_mLabel(mk)}</div><div style="font-size:10px;font-weight:400;color:var(--mid)">CSAT · # · share</div></th>`).join('')}
       <th style="text-align:center;${pivotStyle}">Overall</th>
       <th style="text-align:center">MoM Δ</th>
-      <th style="text-align:center">Vol</th>
+      <th style="text-align:center">Total surveys</th>
+      <th style="text-align:center">Share %</th>
     </tr>`;
     const bodyRows = dimRows.map(r => `<tr>
-      <td style="font-weight:600;max-width:160px;white-space:normal">${r.dimVal}</td>
-      ${months.map(mk => {
-        const v = r.mmap[mk]; const rated=(v?.good||0)+(v?.bad||0);
-        const pct = rated>0 ? v.good/rated*100 : null;
-        return `<td style="text-align:center;padding:6px 8px">${_csatBadge(pct)}</td>`;
-      }).join('')}
-      <td style="text-align:center;${pivotStyle}">${_csatBadge(r.overallPct)}</td>
-      <td style="text-align:center">${_deltaHtml(r.momDelta)}</td>
-      <td style="text-align:center;color:var(--mid);font-size:12px">${fmtN(r.vol)}</td>
+      <td style="font-weight:600;max-width:160px;white-space:normal;vertical-align:middle">${r.dimVal}</td>
+      ${months.map(mk => _dimCell(r.mmap[mk], monthTotal[mk])).join('')}
+      <td style="text-align:center;vertical-align:middle;${pivotStyle}">${_csatBadge(r.overallPct)}</td>
+      <td style="text-align:center;vertical-align:middle">${_deltaHtml(r.momDelta)}</td>
+      <td style="text-align:center;vertical-align:middle;font-weight:600">${fmtN(r.vol)}</td>
+      <td style="text-align:center;vertical-align:middle;font-weight:600">${grandTotal>0?(r.vol/grandTotal*100).toFixed(1)+'%':'—'}</td>
     </tr>`).join('');
     const footerRow = `<tr style="background:var(--surface2)">
       <td style="font-weight:600;color:var(--mid)">All ${label.toLowerCase()}s</td>
-      ${months.map(mk => {
-        const v=allAgg[mk]||{}; const rated=(v.good||0)+(v.bad||0);
-        const pct=rated>0?v.good/rated*100:null;
-        return `<td style="text-align:center;padding:6px 8px">${_csatBadge(pct)}</td>`;
-      }).join('')}
-      <td style="text-align:center;${pivotStyle}">${_csatBadge(fPct)}</td>
-      <td style="text-align:center">${_deltaHtml(fDelta)}</td>
-      <td style="text-align:center;color:var(--mid);font-size:12px">${fmtN(fAll)}</td>
+      ${months.map(mk => _dimCell(allAgg[mk]?.total>0?allAgg[mk]:null, monthTotal[mk])).join('')}
+      <td style="text-align:center;vertical-align:middle;${pivotStyle}">${_csatBadge(fPct)}</td>
+      <td style="text-align:center;vertical-align:middle">${_deltaHtml(fDelta)}</td>
+      <td style="text-align:center;vertical-align:middle;font-weight:600">${fmtN(fAll)}</td>
+      <td style="text-align:center;vertical-align:middle;font-weight:600">100%</td>
     </tr>`;
     tbl.querySelector('tbody').innerHTML = bodyRows + footerRow;
 
     // Legend
-    _renderMoMlegend('Month-over-month CSAT% pivot — MoM Δ = last vs prior month');
+    _renderMoMlegend('Month-over-month pivot — cell shows CSAT% · # surveys · % of that month\'s total · MoM Δ = last vs prior month');
   }
 
   // ── MoM pivot: Contact Reason (3-metric cells) ────────────────────────────
@@ -1717,12 +1748,28 @@ function renderCSATView() {
                resp: v.total>0 ? rated/v.total*100 : null };
     }).sort((a,b) => a.wk - b.wk);
 
-    tbl.querySelector('thead').innerHTML = `<tr>
-      <th>Week</th><th>Week Start</th>
-      <th>Total Tickets</th><th>Rated</th>
-      <th>Good (5)</th><th>Bad (1)</th>
-      <th>CSAT%</th><th>Response%</th>
-    </tr>`;
+    tbl.style.tableLayout = 'fixed';
+    tbl.querySelector('thead').innerHTML = `
+      <colgroup>
+        <col style="width:6%">
+        <col style="width:13%">
+        <col style="width:13%">
+        <col style="width:11%">
+        <col style="width:11%">
+        <col style="width:11%">
+        <col style="width:11%">
+        <col style="width:11%">
+      </colgroup>
+      <tr>
+        <th style="text-align:center">Week</th>
+        <th style="text-align:center">Week Start</th>
+        <th>Total Tickets</th>
+        <th>Rated</th>
+        <th>Good (5)</th>
+        <th>Bad (1)</th>
+        <th>CSAT%</th>
+        <th>Response%</th>
+      </tr>`;
     tbl.querySelector('tbody').innerHTML = wRows.map(r => `<tr>
       <td style="font-weight:700">W${r.wk}</td>
       <td>${fmtDate(r.weekStart)}</td>
@@ -3220,8 +3267,10 @@ function monthFromDate(dateStr) {
 }
 function fmtDate(dateStr) {
   if (!dateStr) return '-';
-  const d = new Date(dateStr+'T12:00:00');
-  if (isNaN(d)) return dateStr;
+  // Strip time portion (handles both "YYYY-MM-DD" and "YYYY-MM-DDTHH:mm:ss.sssZ")
+  const clean = String(dateStr).split('T')[0];
+  const d = new Date(clean + 'T12:00:00');
+  if (isNaN(d)) return clean;
   return `${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
 }
 function n(v)    { const f=parseFloat(v); return isNaN(f)?0:f; }
