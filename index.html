@@ -751,17 +751,25 @@ function getWeeklyData() {
     fmap[k] = f;
     wsMap[k] = _normWS(f.weekStart); // canonical Sunday weekStart from forecast
   });
-  inbound.forEach(i => { imap[String(i.week)] = i; });
   weeklyKPI.forEach(k => { kmap[String(k.week)] = k; });
 
-  // Aggregate daily inbound → weekly
+  // Aggregate daily inbound → weekly buckets
+  // Track which weeks have daily data so we never mix with legacy Weekly_Inbound for the same week
+  const dailyWeeks = new Set();
   inboundD.forEach(d => {
     const k = String(d.week);
-    if (!wsMap[k]) wsMap[k] = _normWS(d.weekStart); // fallback if no forecast
+    dailyWeeks.add(k);
+    if (!wsMap[k]) wsMap[k] = _normWS(d.weekStart);
     if (!imap[k]) imap[k] = { chatOnly:0, emailOnly:0, totalOnly:0, chatTotal:'', emailTotal:'', totalTotal:'' };
     imap[k].chatOnly  = (imap[k].chatOnly  || 0) + n(d.chatOnly);
     imap[k].emailOnly = (imap[k].emailOnly || 0) + n(d.emailOnly);
     imap[k].totalOnly = (imap[k].totalOnly || 0) + n(d.totalOnly);
+  });
+
+  // Load legacy Weekly_Inbound ONLY for weeks that have no daily data (avoids double-counting)
+  inbound.forEach(i => {
+    const k = String(i.week);
+    if (!dailyWeeks.has(k)) imap[k] = i;  // skip if daily data already covers this week
   });
 
   // Aggregate daily solved → weekly
