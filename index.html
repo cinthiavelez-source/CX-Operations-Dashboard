@@ -1217,56 +1217,76 @@ function renderTracker() {
 
   const hasDailyInb = cachedData.inboundD.some(d => d.date && _normWS(d.date).startsWith(`${trackerYear}-${pad(trackerMonth+1)}`));
 
+  // Build daily SLA map: dateStr → { achieved, breached }
+  const dailySLAMap = {};
+  (cachedData.slaData || []).forEach(d => {
+    const ds = _normWS(d.date);
+    if (!ds) return;
+    if (!dailySLAMap[ds]) dailySLAMap[ds] = { achieved: 0, breached: 0 };
+    dailySLAMap[ds].achieved += n(d.achieved);
+    dailySLAMap[ds].breached += n(d.breached);
+  });
+
+  // Build weekly CSAT map from weekly KPI data
+  const weeklyCsatMap = {};
+  getWeeklyData().forEach(w => {
+    if (w.csat != null) weeklyCsatMap[String(w.week)] = w.csat;
+  });
+
   let html = '';
   groups.forEach(grp => {
     const wr = grp.weekRow || {};
-    const wTotalFCST   = grp.days.reduce((s,d)=>s+(d.totalFCST||0),0);
-    const wTotalSolved = grp.days.reduce((s,d)=>s+(d.totalSolved||0),0);
-    const wTotalInb    = grp.days.reduce((s,d)=>s+(d.totalInb||0),0);
-    const wAcc = wTotalFCST ? (wTotalSolved/wTotalFCST*100) : null;
-    const wInbAcc = wTotalFCST && wTotalInb ? (wTotalInb/wTotalFCST*100) : null;
+    const wTotalFCST   = grp.days.reduce((s,d) => s + (d.totalFCST  || 0), 0);
+    const wTotalSolved = grp.days.reduce((s,d) => s + (d.totalSolved || 0), 0);
+    const wTotalInb    = grp.days.reduce((s,d) => s + (d.totalInb    || 0), 0);
+    const wAcc    = wTotalFCST ? (wTotalSolved / wTotalFCST * 100) : null;
+    const wInbAcc = wTotalFCST && wTotalInb ? (wTotalInb / wTotalFCST * 100) : null;
+    // Weekly SLA: sum achieved/breached across all days in the group
+    let wAch = 0, wBre = 0;
+    grp.days.forEach(d => { const s = dailySLAMap[d.date]; if (s) { wAch += s.achieved; wBre += s.breached; } });
+    const wSLA  = (wAch + wBre) > 0 ? wAch / (wAch + wBre) * 100 : (wr.sla || null);
+    const wCSAT = weeklyCsatMap[String(grp.weekNum)] || wr.csat || null;
 
     html += `<div class="week-block">
       <div class="week-block-header">
         <span class="wlbl">W${grp.weekNum}</span>
         <span class="wk-stat">Week of <strong>${fmtDate(grp.weekStart)}</strong></span>
-        ${wTotalFCST ? `<span class="wk-stat">FCST: <strong>${fmtN(wTotalFCST)}</strong></span>` : ''}
+        ${wTotalFCST  ? `<span class="wk-stat">FCST: <strong>${fmtN(wTotalFCST)}</strong></span>` : ''}
         ${wTotalSolved ? `<span class="wk-stat">Solved: <strong>${fmtN(wTotalSolved)}</strong></span>` : ''}
-        ${wAcc !== null ? `<span class="wk-stat">Solve/FCST: <strong>${fmtPct(wAcc)}</strong></span>` : ''}
-        ${wInbAcc !== null ? `<span class="wk-stat">Inb/FCST: <strong>${fmtPct(wInbAcc)}</strong></span>` : ''}
-        ${wr.sla    ? `<span class="wk-stat">SLA: <strong>${fmtPct(wr.sla)}</strong></span>`    : ''}
-        ${wr.csat   ? `<span class="wk-stat">CSAT: <strong>${fmtPct(wr.csat)}</strong></span>`   : ''}
+        ${wAcc    != null ? `<span class="wk-stat">Solve/FCST: <strong>${fmtPct(wAcc)}</strong></span>` : ''}
+        ${wInbAcc != null ? `<span class="wk-stat">Inb/FCST: <strong>${fmtPct(wInbAcc)}</strong></span>` : ''}
+        ${wSLA    != null ? `<span class="wk-stat">SLA: <strong class="${colorSLA(wSLA)}">${fmtPct(wSLA)}</strong></span>` : ''}
+        ${wCSAT   != null ? `<span class="wk-stat">CSAT: <strong class="${colorCSAT(wCSAT)}">${fmtPct(wCSAT)}</strong></span>` : ''}
       </div>
       <div class="table-wrapper" style="border-radius:0 0 8px 8px">
       <table>
         <thead><tr>
           <th>Day</th><th>Date</th>
-          <th>Chat FCST</th>${hasDailyInb?'<th>Chat Real</th><th>Chat%</th>':''}
-          <th>Email FCST</th>${hasDailyInb?'<th>Email Real</th><th>Email%</th>':''}
-          <th>Total FCST</th>${hasDailyInb?'<th>Total Inb</th><th>Inb Acc%</th>':''}
-          <th>Chat Solved</th><th>Email Solved</th><th>Total Solved</th><th>Solve/FCST%</th>
+          <th>Total FCST</th>
+          ${hasDailyInb ? '<th>Total Inb</th><th>Inb Acc%</th>' : ''}
+          <th>Total Solved</th><th>Solve/FCST%</th>
+          <th>SLA%</th><th>CSAT%</th>
         </tr></thead>
         <tbody>`;
 
     grp.days.forEach(day => {
-      const isFuture = new Date(day.date) > new Date();
-      const solveAcc = day.totalFCST && day.totalSolved ? day.totalSolved/day.totalFCST*100 : null;
-      const inbAcc   = day.totalFCST && day.totalInb    ? day.totalInb/day.totalFCST*100    : null;
-      const chatAcc  = day.chatFCST  && day.chatInb     ? day.chatInb/day.chatFCST*100      : null;
-      const emailAcc = day.emailFCST && day.emailInb    ? day.emailInb/day.emailFCST*100    : null;
-      html += `<tr ${isFuture?'class="cell-dim"':''}>
+      const isFuture  = new Date(day.date) > new Date();
+      const solveAcc  = day.totalFCST && day.totalSolved ? day.totalSolved / day.totalFCST * 100 : null;
+      const inbAcc    = day.totalFCST && day.totalInb    ? day.totalInb    / day.totalFCST * 100 : null;
+      const slaEntry  = dailySLAMap[day.date];
+      const slaPct    = slaEntry && (slaEntry.achieved + slaEntry.breached) > 0
+                        ? slaEntry.achieved / (slaEntry.achieved + slaEntry.breached) * 100 : null;
+      // CSAT is weekly — show the week value on each row (greyed to indicate it's not daily)
+      const csatVal   = wCSAT;
+      html += `<tr ${isFuture ? 'class="cell-dim"' : ''}>
         <td style="font-weight:600">${day.dayName}</td>
         <td>${day.date.slice(5)}</td>
-        <td>${fmtN(day.chatFCST)}</td>
-        ${hasDailyInb ? `<td>${fmtN(day.chatInb)}</td><td class="${colorAcc(chatAcc)}">${chatAcc?fmtPct(chatAcc):'-'}</td>` : ''}
-        <td>${fmtN(day.emailFCST)}</td>
-        ${hasDailyInb ? `<td>${fmtN(day.emailInb)}</td><td class="${colorAcc(emailAcc)}">${emailAcc?fmtPct(emailAcc):'-'}</td>` : ''}
         <td>${fmtN(day.totalFCST)}</td>
-        ${hasDailyInb ? `<td>${fmtN(day.totalInb)}</td><td class="${colorAcc(inbAcc)}">${inbAcc?fmtPct(inbAcc):'-'}</td>` : ''}
-        <td>${fmtN(day.chatSolved)}</td>
-        <td>${fmtN(day.emailSolved)}</td>
+        ${hasDailyInb ? `<td>${fmtN(day.totalInb)}</td><td class="${colorAcc(inbAcc)}">${inbAcc != null ? fmtPct(inbAcc) : '-'}</td>` : ''}
         <td style="font-weight:700">${fmtN(day.totalSolved)}</td>
-        <td class="${colorAcc(solveAcc)}">${solveAcc?fmtPct(solveAcc):'-'}</td>
+        <td class="${colorAcc(solveAcc)}">${solveAcc != null ? fmtPct(solveAcc) : '-'}</td>
+        <td class="${colorSLA(slaPct)}">${slaPct != null ? fmtPct(slaPct) : '-'}</td>
+        <td style="color:var(--mid);font-size:11px">${csatVal != null ? fmtPct(csatVal) : '-'}</td>
       </tr>`;
     });
 
