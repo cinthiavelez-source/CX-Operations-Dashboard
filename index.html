@@ -444,6 +444,69 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
       </div>
     </div>
 
+    <!-- SLA Daily -->
+    <div class="upload-card highlight">
+      <div class="format-badge">DAILY · AUTO SLA%</div>
+      <h3>📊 SLA — Achieved &amp; Breached</h3>
+      <p>Wide-format CSV with channel rows, <strong>achieved / breached</strong> sub-rows, and daily date columns. <strong>SLA% is auto-computed</strong> — no manual entry needed.</p>
+      <details class="fmt-box">
+        <summary>📋 Expected format</summary>
+        <div class="fmt-box-body">
+          <table class="fmt-tbl"><thead><tr><th>Breakdown I</th><th>Breakdown II</th><th>01-Jun-26</th><th>02-Jun-26</th><th>...</th></tr></thead>
+          <tbody><tr><td>chat</td><td>achieved</td><td>188</td><td>185</td><td class="dim">…</td></tr>
+          <tr><td>chat</td><td>breached</td><td>31</td><td>43</td><td class="dim">…</td></tr>
+          <tr><td>email</td><td>achieved</td><td>1,012</td><td>1,299</td><td class="dim">…</td></tr>
+          <tr><td>email</td><td>breached</td><td>285</td><td>103</td><td class="dim">…</td></tr></tbody></table>
+          <a class="fmt-dl" onclick="dlTemplate('sla_template.csv','Breakdown I\tBreakdown II\t01-Jun-26\t02-Jun-26\nchat\tachieved\t188\t185\nchat\tbreached\t31\t43\nemail\tachieved\t1012\t1299\nemail\tbreached\t285\t103\nsms\tachieved\t213\t283\nsms\tbreached\t15\t17\n')">📥 Download template</a>
+        </div>
+      </details>
+      <div class="upload-zone" id="zone-sla" ondragover="dragOver(event,'zone-sla')" ondragleave="dragLeave('zone-sla')" ondrop="dropFile(event,'sla')">
+        <input type="file" accept=".csv" id="file-sla" onchange="fileChosen(event,'sla')">
+        <div class="uf-icon">📂</div>
+        <strong id="fname-sla">Choose file or drag here</strong>
+        <p>SLA calculations per channel Daily.csv</p>
+      </div>
+      <div id="preview-sla" class="upload-preview" style="display:none"></div>
+      <div class="upload-actions">
+        <button class="btn btn-primary" id="ubtn-sla" onclick="doUpload('sla')" disabled>Upload</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearUpload('sla')">Clear</button>
+      </div>
+    </div>
+
+    <!-- CSAT Tickets Daily -->
+    <div class="upload-card highlight">
+      <div class="format-badge">DAILY · AUTO CSAT%</div>
+      <h3>⭐ CSAT Tickets</h3>
+      <p>Ticket-level CSV with CSAT score (5=good, 1=bad), contact reason, and channel. Tag with a week to auto-compute weekly CSAT%.</p>
+      <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:11px;font-weight:700;color:var(--mid)">TAG WEEK (optional)</label>
+        <select id="csat-week-select" style="padding:5px 10px;border:2px solid var(--border);border-radius:6px;font-size:12px;outline:none">
+          <option value="">— no week tag —</option>
+        </select>
+      </div>
+      <details class="fmt-box">
+        <summary>📋 Expected format</summary>
+        <div class="fmt-box-body">
+          <table class="fmt-tbl"><thead><tr><th>TICKET_ID</th><th>Csat</th><th>Contact Reason</th><th>Channel</th><th>LTR</th><th>LIFESPAN_SEGMENT</th></tr></thead>
+          <tbody><tr><td>2377415</td><td></td><td>meal experience - quality issues</td><td>email</td><td>5-10k</td><td>&gt; 52 weeks</td></tr>
+          <tr><td>2395209</td><td>5</td><td>order management</td><td>chat</td><td>less than 5k</td><td>&gt; 52 weeks</td></tr>
+          <tr><td>2406448</td><td>1</td><td>billing - payment</td><td>email</td><td>10-25k</td><td>5-12 weeks</td></tr></tbody></table>
+          <p style="font-size:10px;color:var(--mid);margin-top:6px">Csat: <strong>5</strong> = good · <strong>1</strong> = bad · <em>empty</em> = no response (excluded from %)</p>
+        </div>
+      </details>
+      <div class="upload-zone" id="zone-csat" ondragover="dragOver(event,'zone-csat')" ondragleave="dragLeave('zone-csat')" ondrop="dropFile(event,'csat')">
+        <input type="file" accept=".csv" id="file-csat" onchange="fileChosen(event,'csat')">
+        <div class="uf-icon">📂</div>
+        <strong id="fname-csat">Choose file or drag here</strong>
+        <p>CSAT Daily.csv</p>
+      </div>
+      <div id="preview-csat" class="upload-preview" style="display:none"></div>
+      <div class="upload-actions">
+        <button class="btn btn-primary" id="ubtn-csat" onclick="doUpload('csat')" disabled>Upload</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearUpload('csat')">Clear</button>
+      </div>
+    </div>
+
     <!-- Monthly Forecast -->
     <div class="upload-card">
       <div class="format-badge">FORECAST · MONTHLY</div>
@@ -477,22 +540,46 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
 
 <!-- ── LOG KPIs PAGE ── -->
 <div id="page-kpi" class="page">
-  <div class="page-header"><h2>Log Weekly KPIs</h2></div>
+  <div class="page-header"><h2>Log KPIs</h2></div>
   <div class="kpi-form">
-    <div class="week-selector-bar">
-      <label>Select Week</label>
-      <select id="kpi-week-select" onchange="onKpiWeekChange()" style="padding:7px 12px;border:2px solid var(--border);border-radius:7px;font-size:13px;outline:none">
-        <option value="">— choose a week —</option>
-      </select>
-      <span id="kpi-week-badge" class="week-badge" style="display:none"></span>
+    <!-- Period Type Selector -->
+    <div class="week-selector-bar" style="gap:12px;flex-wrap:wrap">
+      <label style="font-size:12px;font-weight:700;color:var(--mid);text-transform:uppercase">Period</label>
+      <div class="toggle-group">
+        <button class="toggle-btn active" id="kpi-type-weekly"   onclick="setKpiPeriodType('weekly')">Weekly</button>
+        <button class="toggle-btn"        id="kpi-type-monthly"  onclick="setKpiPeriodType('monthly')">Monthly</button>
+        <button class="toggle-btn"        id="kpi-type-quarterly" onclick="setKpiPeriodType('quarterly')">Quarterly</button>
+      </div>
+      <!-- Weekly selector -->
+      <div id="kpi-sel-weekly" style="display:flex;gap:8px;align-items:center">
+        <select id="kpi-week-select" onchange="onKpiWeekChange()" style="padding:7px 12px;border:2px solid var(--border);border-radius:7px;font-size:13px;outline:none">
+          <option value="">— choose a week —</option>
+        </select>
+        <span id="kpi-week-badge" class="week-badge" style="display:none"></span>
+      </div>
+      <!-- Monthly selector -->
+      <div id="kpi-sel-monthly" style="display:none;gap:8px;align-items:center">
+        <select id="kpi-month-select" onchange="onKpiMonthChange()" style="padding:7px 12px;border:2px solid var(--border);border-radius:7px;font-size:13px;outline:none">
+          <option value="">— choose a month —</option>
+        </select>
+        <span id="kpi-month-badge" class="week-badge" style="display:none"></span>
+      </div>
+      <!-- Quarterly selector -->
+      <div id="kpi-sel-quarterly" style="display:none;gap:8px;align-items:center">
+        <select id="kpi-quarter-select" onchange="onKpiQuarterChange()" style="padding:7px 12px;border:2px solid var(--border);border-radius:7px;font-size:13px;outline:none">
+          <option value="">— choose a quarter —</option>
+        </select>
+        <span id="kpi-quarter-badge" class="week-badge" style="display:none"></span>
+      </div>
     </div>
     <div id="kpi-success" class="success-banner">✅ KPIs saved successfully!</div>
     <div class="form-section">
       <h3>⚡ Quality & Service Level</h3>
+      <p style="font-size:11px;color:var(--mid);margin-bottom:12px">💡 SLA% and CSAT% are auto-computed from daily uploads. Enter below only if overriding manually.</p>
       <div class="form-grid">
-        <div class="form-group"><label>SLA %</label><input type="number" id="kpi-sla" min="0" max="100" step="0.1" placeholder="e.g. 87"></div>
+        <div class="form-group"><label>SLA % <span style="color:var(--mid);font-size:10px">(auto if uploaded)</span></label><input type="number" id="kpi-sla" min="0" max="100" step="0.1" placeholder="auto-computed"></div>
         <div class="form-group"><label>FRT (hours)</label><input type="number" id="kpi-frt" min="0" step="0.1" placeholder="e.g. 11"></div>
-        <div class="form-group"><label>CSAT %</label><input type="number" id="kpi-csat" min="0" max="100" step="0.1" placeholder="e.g. 79"></div>
+        <div class="form-group"><label>CSAT % <span style="color:var(--mid);font-size:10px">(auto if uploaded)</span></label><input type="number" id="kpi-csat" min="0" max="100" step="0.1" placeholder="auto-computed"></div>
         <div class="form-group"><label>CSAT Response Rate %</label><input type="number" id="kpi-csatRespRate" min="0" max="100" step="0.1" placeholder="e.g. 17"></div>
       </div>
     </div>
@@ -644,7 +731,7 @@ const MONTHS_FULL  = ['January','February','March','April','May','June','July','
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 // ─── STATE ──────────────────────────────────────────────────────────────────
-let cachedData   = { forecasts:[], forecastsM:[], forecastsD:[], inbound:[], solved:[], inboundD:[], weeklyKPI:[], cr:[], subCR:[], config:{} };
+let cachedData   = { forecasts:[], forecastsM:[], forecastsD:[], inbound:[], solved:[], inboundD:[], weeklyKPI:[], monthlyKPI:[], quarterlyKPI:[], slaData:[], csatTickets:[], cr:[], subCR:[], config:{} };
 let cachedRole   = 'viewer';
 let currentPage  = 'overview';
 let ovMode       = 'weekly';
@@ -691,10 +778,14 @@ async function apiFetch() {
     cachedData.inbound    = data.inbound    || [];
     cachedData.solved     = data.solved     || [];
     cachedData.inboundD   = data.inboundD   || [];
-    cachedData.weeklyKPI  = data.weeklyKPI  || [];
-    cachedData.forecastsD = data.forecastsD || [];
-    cachedData.cr         = data.cr         || [];
-    cachedData.subCR      = data.subCR      || [];
+    cachedData.weeklyKPI   = data.weeklyKPI   || [];
+    cachedData.monthlyKPI  = data.monthlyKPI  || [];
+    cachedData.quarterlyKPI= data.quarterlyKPI|| [];
+    cachedData.slaData     = data.slaData     || [];
+    cachedData.csatTickets = data.csatTickets || [];
+    cachedData.forecastsD  = data.forecastsD  || [];
+    cachedData.cr          = data.cr          || [];
+    cachedData.subCR       = data.subCR       || [];
     cachedData.config     = data.config     || {};
     cachedRole = data.role || 'viewer';
     setSyncStatus('ok');
@@ -742,7 +833,7 @@ async function navTo(page) {
 
 // ─── DATA COMPUTATION ────────────────────────────────────────────────────────
 function getWeeklyData() {
-  const { forecasts, inbound, inboundD, solved, weeklyKPI } = cachedData;
+  const { forecasts, inbound, inboundD, solved, weeklyKPI, slaData, csatTickets } = cachedData;
   // Key = week number only (string) — so Sunday/Monday weekStart mismatches never split a week into two rows
   const fmap = {}, imap = {}, kmap = {}, svWeek = {}, wsMap = {};
 
@@ -782,23 +873,49 @@ function getWeeklyData() {
     svWeek[k].totalSolved += n(s.totalSolved);
   });
 
+  // Aggregate Daily_SLA → weekly achieved/breached (all channels combined)
+  const slaWeek = {};
+  slaData.forEach(d => {
+    const k = String(d.week);
+    if (!slaWeek[k]) slaWeek[k] = { achieved:0, breached:0 };
+    slaWeek[k].achieved += n(d.achieved);
+    slaWeek[k].breached += n(d.breached);
+  });
+
+  // Aggregate CSAT tickets → weekly CSAT% (good=5, bad=1, empty=no response)
+  const csatWeek = {};
+  csatTickets.forEach(t => {
+    const k = String(t.week);
+    if (!k || k === 'undefined') return;
+    if (!csatWeek[k]) csatWeek[k] = { good:0, bad:0 };
+    if (String(t.csat) === '5') csatWeek[k].good++;
+    else if (String(t.csat) === '1') csatWeek[k].bad++;
+  });
+
   const allKeys = new Set([...Object.keys(fmap), ...Object.keys(imap),
-    ...Object.keys(kmap), ...Object.keys(svWeek)]);
+    ...Object.keys(kmap), ...Object.keys(svWeek), ...Object.keys(slaWeek)]);
 
   const rows = [];
   allKeys.forEach(key => {
     const week = parseInt(key);
     if (!week) return;
-    // Resolve weekStart: prefer forecast's Sunday date, else stored value, else compute
     const weekStart = wsMap[key] || isoWeekToSun(new Date().getFullYear(), week).toISOString().split('T')[0];
     const f  = fmap[key]  || {};
     const iv = imap[key]  || {};
     const k  = kmap[key]  || {};
     const sv = svWeek[key]|| {};
+    const sl = slaWeek[key];
+    const cs = csatWeek[key];
     const totalFCST  = n(f.totalFCST);
     const totalOnly  = n(iv.totalOnly);
     const totalTotal = n(iv.totalTotal);
     const totalSolvd = sv.totalSolved||0;
+    // SLA%: auto-computed from daily SLA data; fall back to manual KPI entry
+    const slaAuto = sl && (sl.achieved + sl.breached) > 0
+      ? sl.achieved / (sl.achieved + sl.breached) * 100 : null;
+    // CSAT%: auto-computed from CSAT tickets tagged with this week; fall back to manual
+    const csatAuto = cs && (cs.good + cs.bad) > 0
+      ? cs.good / (cs.good + cs.bad) * 100 : null;
     rows.push({
       week, weekStart,
       month       : f.month || k.month || monthFromDate(weekStart),
@@ -809,8 +926,8 @@ function getWeeklyData() {
       accOnly     : totalFCST ? totalOnly  / totalFCST * 100 : null,
       accTotal    : totalFCST ? totalTotal / totalFCST * 100 : null,
       solveRate   : totalOnly ? totalSolvd / totalOnly  * 100 : null,
-      sla         : n(k.sla)   || null, frt         : n(k.frt)        || null,
-      csat        : n(k.csat)  || null, csatRespRate: n(k.csatRespRate)|| null,
+      sla         : slaAuto  ?? n(k.sla)  || null, frt : n(k.frt) || null,
+      csat        : csatAuto ?? n(k.csat)  || null, csatRespRate: n(k.csatRespRate)|| null,
       tphCU       : n(k.tphCU) || null, tphBPO      : n(k.tphBPO)     || null,
       hcNeeded    : n(k.hcNeeded)||null,hcReal      : n(k.hcReal)      || null,
       pto         : n(k.pto)   || null,
@@ -1148,38 +1265,112 @@ function renderTracker() {
 }
 
 // ─── LOG KPIs ────────────────────────────────────────────────────────────────
+let kpiPeriodType = 'weekly';
+
+function setKpiPeriodType(type) {
+  kpiPeriodType = type;
+  ['weekly','monthly','quarterly'].forEach(t => {
+    document.getElementById('kpi-type-'+t).classList.toggle('active', t===type);
+    document.getElementById('kpi-sel-'+t).style.display = t===type ? 'flex' : 'none';
+  });
+  clearKPIForm();
+}
+
 function renderLogKPI() {
+  _populateKpiWeekSel();
+  _populateKpiMonthSel();
+  _populateKpiQuarterSel();
+  _populateCsatWeekSel();
+}
+
+function _populateKpiWeekSel() {
   const sel = document.getElementById('kpi-week-select');
-  const weeks = getWeeklyData();
   const existing = sel.value;
   sel.innerHTML = '<option value="">— choose a week —</option>';
-
-  // Build full week list: all weeks from data + fill any gaps from W1 of current year to W+4 ahead
+  const weeks = getWeeklyData();
   const allWeeks = [...weeks];
   const today = new Date();
   const curYear = today.getFullYear();
-  // Ensure every week from W1 of current year through current week + 4 is represented
   for (let wk = 1; wk <= 56; wk++) {
-    const d  = isoWeekToSun(curYear, wk);
+    const d = isoWeekToSun(curYear, wk);
     const ws = d.toISOString().split('T')[0];
-    if (!allWeeks.find(w => _normWS(w.weekStart) === ws)) {
+    if (!allWeeks.find(w => _normWS(w.weekStart) === ws))
       allWeeks.push({ week:wk, weekStart:ws, month: monthFromDate(ws) });
-    }
   }
   allWeeks.sort((a,b) => _normWS(a.weekStart||'').localeCompare(_normWS(b.weekStart||'')));
-
-  // Find current week position, then show 30 past weeks + 4 future
   const todayStr = today.toISOString().split('T')[0];
-  const curIdx = allWeeks.findIndex(w => _normWS(w.weekStart) >= todayStr);
-  const pivot  = curIdx >= 0 ? curIdx : allWeeks.length - 1;
-  const start  = Math.max(0, pivot - 30);
-  const end    = Math.min(allWeeks.length, pivot + 5);
-
-  allWeeks.slice(start, end).forEach(w => {
+  const pivot = Math.max(0, allWeeks.findIndex(w => _normWS(w.weekStart) >= todayStr));
+  allWeeks.slice(Math.max(0, pivot-30), Math.min(allWeeks.length, pivot+5)).forEach(w => {
     const ws = _normWS(w.weekStart);
     const opt = document.createElement('option');
     opt.value = JSON.stringify({ week:w.week, weekStart:ws, month:w.month });
     opt.textContent = `W${w.week} — ${fmtDate(ws)} (${w.month||''})`;
+    sel.appendChild(opt);
+  });
+  if (existing) sel.value = existing;
+}
+
+function _populateKpiMonthSel() {
+  const sel = document.getElementById('kpi-month-select');
+  if (!sel) return;
+  const existing = sel.value;
+  sel.innerHTML = '<option value="">— choose a month —</option>';
+  const today = new Date();
+  const yr = today.getFullYear();
+  // Show 18 months: 12 past + current + 5 ahead
+  for (let delta = -12; delta <= 5; delta++) {
+    const d = new Date(yr, today.getMonth() + delta, 1);
+    const year = d.getFullYear(); const month = d.getMonth();
+    const key = `${year}-${String(month+1).padStart(2,'0')}`;
+    const label = MONTHS_FULL[month] + ' ' + year;
+    const opt = document.createElement('option');
+    opt.value = JSON.stringify({ periodKey:key, year, month:MONTHS_FULL[month] });
+    opt.textContent = label;
+    sel.appendChild(opt);
+  }
+  if (existing) sel.value = existing;
+}
+
+function _populateKpiQuarterSel() {
+  const sel = document.getElementById('kpi-quarter-select');
+  if (!sel) return;
+  const existing = sel.value;
+  sel.innerHTML = '<option value="">— choose a quarter —</option>';
+  const yr = new Date().getFullYear();
+  [yr-1, yr, yr+1].forEach(year => {
+    ['Q1','Q2','Q3','Q4'].forEach(q => {
+      const key = `${year}-${q}`;
+      const opt = document.createElement('option');
+      opt.value = JSON.stringify({ periodKey:key, year, quarter:q });
+      opt.textContent = `${q} ${year}`;
+      sel.appendChild(opt);
+    });
+  });
+  if (existing) sel.value = existing;
+}
+
+function _populateCsatWeekSel() {
+  const sel = document.getElementById('csat-week-select');
+  if (!sel) return;
+  const existing = sel.value;
+  sel.innerHTML = '<option value="">— no week tag —</option>';
+  const weeks = getWeeklyData();
+  const today = new Date();
+  const allWeeks = [...weeks];
+  const curYear = today.getFullYear();
+  for (let wk = 1; wk <= 56; wk++) {
+    const d = isoWeekToSun(curYear, wk);
+    const ws = d.toISOString().split('T')[0];
+    if (!allWeeks.find(w => _normWS(w.weekStart) === ws))
+      allWeeks.push({ week:wk, weekStart:ws, month: monthFromDate(ws) });
+  }
+  allWeeks.sort((a,b) => _normWS(a.weekStart||'').localeCompare(_normWS(b.weekStart||'')));
+  const pivot = Math.max(0, allWeeks.findIndex(w => _normWS(w.weekStart) >= today.toISOString().split('T')[0]));
+  allWeeks.slice(Math.max(0, pivot-20), Math.min(allWeeks.length, pivot+4)).forEach(w => {
+    const ws = _normWS(w.weekStart);
+    const opt = document.createElement('option');
+    opt.value = JSON.stringify({ week:w.week, weekStart:ws });
+    opt.textContent = `W${w.week} — ${fmtDate(ws)}`;
     sel.appendChild(opt);
   });
   if (existing) sel.value = existing;
@@ -1192,8 +1383,30 @@ function onKpiWeekChange() {
   const { week, weekStart, month } = JSON.parse(val);
   badge.style.display='inline-block';
   badge.textContent = `W${week} · ${fmtDate(weekStart)} · ${month||''}`;
-  // Pre-fill if existing KPI data
-  const existing = cachedData.weeklyKPI.find(k => String(k.week)===String(week) && String(k.weekStart)===String(weekStart));
+  const existing = cachedData.weeklyKPI.find(k => String(k.week)===String(week));
+  _fillKpiForm(existing);
+}
+function onKpiMonthChange() {
+  const val = document.getElementById('kpi-month-select').value;
+  const badge = document.getElementById('kpi-month-badge');
+  if (!val) { badge.style.display='none'; return; }
+  const { periodKey, month, year } = JSON.parse(val);
+  badge.style.display='inline-block';
+  badge.textContent = `${month} ${year}`;
+  const existing = cachedData.monthlyKPI.find(k => String(k.periodKey)===periodKey);
+  _fillKpiForm(existing);
+}
+function onKpiQuarterChange() {
+  const val = document.getElementById('kpi-quarter-select').value;
+  const badge = document.getElementById('kpi-quarter-badge');
+  if (!val) { badge.style.display='none'; return; }
+  const { periodKey, quarter, year } = JSON.parse(val);
+  badge.style.display='inline-block';
+  badge.textContent = `${quarter} ${year}`;
+  const existing = cachedData.quarterlyKPI.find(k => String(k.periodKey)===periodKey);
+  _fillKpiForm(existing);
+}
+function _fillKpiForm(existing) {
   ['sla','frt','csat','csatRespRate','tphCU','tphBPO','hcNeeded','hcReal','pto'].forEach(f => {
     const el = document.getElementById('kpi-'+f);
     if (el) el.value = existing && existing[f] ? existing[f] : '';
@@ -1201,25 +1414,45 @@ function onKpiWeekChange() {
 }
 
 async function saveKPI() {
-  const selVal = document.getElementById('kpi-week-select').value;
-  if (!selVal) { showToast('Please select a week first', '#F59E0B'); return; }
-  const { week, weekStart, month } = JSON.parse(selVal);
   const get = id => { const el = document.getElementById('kpi-'+id); return el ? el.value : ''; };
-  const kpi = { week, weekStart, month,
-    sla:get('sla'), frt:get('frt'), csat:get('csat'), csatRespRate:get('csatRespRate'),
+  const kpiFields = { sla:get('sla'), frt:get('frt'), csat:get('csat'), csatRespRate:get('csatRespRate'),
     tphCU:get('tphCU'), tphBPO:get('tphBPO'), hcNeeded:get('hcNeeded'), hcReal:get('hcReal'), pto:get('pto') };
+
+  let action, kpi, label;
+  if (kpiPeriodType === 'weekly') {
+    const selVal = document.getElementById('kpi-week-select').value;
+    if (!selVal) { showToast('Please select a week first', '#F59E0B'); return; }
+    const { week, weekStart, month } = JSON.parse(selVal);
+    kpi = { week, weekStart, month, ...kpiFields };
+    action = 'saveWeeklyKPI'; label = `W${week}`;
+    const idx = cachedData.weeklyKPI.findIndex(k=>String(k.week)===String(week));
+    if (idx>=0) cachedData.weeklyKPI[idx] = { ...kpi }; else cachedData.weeklyKPI.push({ ...kpi });
+  } else if (kpiPeriodType === 'monthly') {
+    const selVal = document.getElementById('kpi-month-select').value;
+    if (!selVal) { showToast('Please select a month first', '#F59E0B'); return; }
+    const { periodKey, year, month } = JSON.parse(selVal);
+    kpi = { periodKey, year, month, ...kpiFields };
+    action = 'saveMonthlyKPI'; label = `${month} ${year}`;
+    const idx = cachedData.monthlyKPI.findIndex(k=>String(k.periodKey)===periodKey);
+    if (idx>=0) cachedData.monthlyKPI[idx] = { ...kpi }; else cachedData.monthlyKPI.push({ ...kpi });
+  } else {
+    const selVal = document.getElementById('kpi-quarter-select').value;
+    if (!selVal) { showToast('Please select a quarter first', '#F59E0B'); return; }
+    const { periodKey, year, quarter } = JSON.parse(selVal);
+    kpi = { periodKey, year, quarter, ...kpiFields };
+    action = 'saveQuarterlyKPI'; label = `${quarter} ${year}`;
+    const idx = cachedData.quarterlyKPI.findIndex(k=>String(k.periodKey)===periodKey);
+    if (idx>=0) cachedData.quarterlyKPI[idx] = { ...kpi }; else cachedData.quarterlyKPI.push({ ...kpi });
+  }
+
   showLoading(true, 'Saving KPIs…');
   try {
-    const res = await apiPost({ action:'saveWeeklyKPI', kpi });
+    const res = await apiPost({ action, kpi });
     if (res.error) throw new Error(res.error);
     const banner = document.getElementById('kpi-success');
     banner.style.display='block';
     setTimeout(()=>{ banner.style.display='none'; },3000);
-    showToast(`✅ KPIs saved for W${week}`, '#10B981');
-    // Update cache
-    const idx = cachedData.weeklyKPI.findIndex(k=>String(k.week)===String(week)&&String(k.weekStart)===String(weekStart));
-    if (idx>=0) cachedData.weeklyKPI[idx] = { ...kpi, loggedBy: getUser()?.email||'' };
-    else cachedData.weeklyKPI.push({ ...kpi, loggedBy: getUser()?.email||'' });
+    showToast(`✅ KPIs saved for ${label}`, '#10B981');
   } catch(err) {
     showToast('Error: ' + err.message, '#EF4444');
   } finally { showLoading(false); }
@@ -1243,9 +1476,9 @@ function dlTemplate(filename, csvContent) {
 
 // ─── UPLOAD ──────────────────────────────────────────────────────────────────
 function renderUpload() {
-  // Restore existing admin URL if set
   const urlInput = document.getElementById('script-url-input');
   if (urlInput) urlInput.value = scriptUrl() || '';
+  _populateCsatWeekSel(); // keep the CSAT week selector in sync
 }
 
 function dragOver(e, zoneId) { e.preventDefault(); document.getElementById(zoneId).classList.add('drag'); }
@@ -1289,6 +1522,8 @@ function processUploadFile(file, type) {
       if (type === 'forecast')          records = parseForecastCSV(text, year);
       if (type === 'forecast-daily')    records = parseDailyForecastCSV(text, year);
       if (type === 'forecast-monthly')  records = parseMonthlyForecastCSV(text);
+      if (type === 'sla')               records = parseSLACSV(text);
+      if (type === 'csat')              records = parseCSATCSV(text);
       if (type === 'cr')                records = parseContactReasonCSV(text, 'cr');
       if (type === 'subcr')             records = parseContactReasonCSV(text, 'subcr');
     } catch(parseErr) {
@@ -1331,6 +1566,8 @@ async function doUpload(type) {
     'forecast':          { action:'uploadForecast',        key:'records' },
     'forecast-daily':    { action:'uploadDailyForecast',   key:'records' },
     'forecast-monthly':  { action:'uploadMonthlyForecast', key:'records' },
+    'sla':               { action:'uploadSLA',             key:'records' },
+    'csat':              { action:'uploadCSAT',            key:'records' },
     'cr':                { action:'uploadCR',              key:'records' },
     'subcr':             { action:'uploadSubCR',           key:'records' },
   };
@@ -1608,6 +1845,82 @@ function parseFlexDate(str) {
   }
   if (str.match(/^\d{4}-\d{2}-\d{2}$/)) return str;
   return null;
+}
+
+// ─── SLA PARSER ──────────────────────────────────────────────────────────────
+// UTF-16 TSV wide format: Breakdown I (channel), Breakdown II (achieved/breached), date cols
+function parseSLACSV(text) {
+  const sep = text.includes('\t') ? '\t' : ',';
+  const lines = parseTSV(text, sep);
+  if (lines.length < 2) return [];
+  const header = lines[0];
+  // Detect format: col1 is a date (variant B) or label (variant A)
+  const h1 = (header[1]||'').trim();
+  const variantB = !!parseFlexDate(h1);
+  const dataOffset = variantB ? 1 : 2;
+  const dailyDates = header.slice(dataOffset).map(h => parseFlexDate((h||'').trim()));
+
+  // Build map: channel → { achieved: [v1,v2,...], breached: [v1,v2,...] }
+  const chanMap = {};
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i];
+    const ch  = (row[0]||'').trim().toLowerCase();
+    const typ = variantB ? null : (row[1]||'').trim().toLowerCase(); // achieved/breached
+    if (!ch) continue;
+    const vals = row.slice(dataOffset).map(v => parseFloat(String(v||'').replace(/,/g,''))||0);
+    if (!chanMap[ch]) chanMap[ch] = { achieved:[], breached:[] };
+    if (typ === 'achieved' || variantB) {
+      chanMap[ch].achieved = vals;
+    } else if (typ === 'breached') {
+      chanMap[ch].breached = vals;
+    }
+  }
+
+  const results = [];
+  dailyDates.forEach((dateStr, idx) => {
+    if (!dateStr) return;
+    const d  = new Date(dateStr+'T12:00:00');
+    const ws = weekStartSunStr(d);
+    const wk = isoWeekSun(d);
+    Object.keys(chanMap).forEach(ch => {
+      const achieved = chanMap[ch].achieved[idx] || 0;
+      const breached = chanMap[ch].breached[idx] || 0;
+      if (!achieved && !breached) return;
+      results.push({ date:dateStr, week:wk, weekStart:ws, channel:ch, achieved, breached });
+    });
+  });
+  results.sort((a,b) => a.date.localeCompare(b.date));
+  return results;
+}
+
+// ─── CSAT TICKETS PARSER ─────────────────────────────────────────────────────
+// UTF-16 TSV: TICKET_ID, Csat, Contact Reason, Channel, LTR, LIFESPAN_SEGMENT
+function parseCSATCSV(text) {
+  const sep = text.includes('\t') ? '\t' : ',';
+  const lines = parseTSV(text, sep);
+  if (lines.length < 2) return [];
+
+  // Get week tag from the selector
+  const wkSel = document.getElementById('csat-week-select');
+  let taggedWeek = '', taggedWS = '';
+  if (wkSel && wkSel.value) {
+    try { const p = JSON.parse(wkSel.value); taggedWeek = p.week; taggedWS = p.weekStart; } catch(e) {}
+  }
+
+  const results = [];
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i];
+    const ticketId = (row[0]||'').trim().replace(/﻿/g,'');
+    if (!ticketId) continue;
+    const csat           = (row[1]||'').trim();
+    const contactReason  = (row[2]||'').trim().toLowerCase();
+    const channel        = (row[3]||'').trim().toLowerCase();
+    const ltr            = (row[4]||'').trim();
+    const lifespanSeg    = (row[5]||'').trim();
+    results.push({ ticketId, csat, contactReason, channel, ltr, lifespanSegment:lifespanSeg,
+      week: taggedWeek, weekStart: taggedWS });
+  }
+  return results;
 }
 
 // ─── CONTACT REASON PARSER ───────────────────────────────────────────────────
