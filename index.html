@@ -1629,6 +1629,32 @@ async function doUpload(type) {
   }
 
   if (!records || !records.length) { showToast('No records to upload', '#F59E0B'); return; }
+
+  // CSAT: chunked upload (325K rows would timeout in a single call)
+  if (type === 'csat') {
+    const CHUNK = 5000;
+    const total = records.length;
+    let totalAdded = 0, totalUpdated = 0;
+    showLoading(true, `Uploading ${fmtN(total)} CSAT tickets in chunks…`);
+    try {
+      for (let i = 0; i < total; i += CHUNK) {
+        const chunk = records.slice(i, i + CHUNK);
+        const pct = Math.round((i / total) * 100);
+        showLoading(true, `Uploading CSAT… ${pct}% (${fmtN(i+chunk.length)}/${fmtN(total)})`);
+        const res = await apiPost({ action:'uploadCSAT', records: chunk });
+        if (res.error) throw new Error(res.error);
+        totalAdded   += res.added   || 0;
+        totalUpdated += res.updated || 0;
+      }
+      showToast(`✅ CSAT: ${fmtN(totalAdded)} added · ${fmtN(totalUpdated)} updated`, '#10B981');
+      clearUpload(type);
+      await apiFetch();
+    } catch(err) {
+      showToast('CSAT upload failed: ' + err.message, '#EF4444');
+    } finally { showLoading(false); }
+    return;
+  }
+
   const actionMap = {
     'only-inbound':      { action:'uploadInboundD',        key:'records' },
     'inbound-total':     { action:'uploadInbound',         key:'records' },
