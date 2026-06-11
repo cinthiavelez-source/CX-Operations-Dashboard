@@ -1264,10 +1264,21 @@ function renderTracker() {
     dailySLAMap[ds].breached += n(d.breached);
   });
 
-  // Build weekly CSAT map from weekly KPI data
+  // Build weekly CSAT map (week number → CSAT%) for the week-header summary bar
   const weeklyCsatMap = {};
   getWeeklyData().forEach(w => {
     if (w.csat != null) weeklyCsatMap[String(w.week)] = w.csat;
+  });
+
+  // Build daily CSAT map (dateStr → CSAT%) from ticket-level CSAT data
+  // good = score 5, bad = score 1, empty = no response (excluded from %)
+  const dailyCsatMap = {};
+  (cachedData.csatTickets || []).forEach(t => {
+    const ds = _normWS(t.date);
+    if (!ds) return;
+    if (!dailyCsatMap[ds]) dailyCsatMap[ds] = { good: 0, bad: 0 };
+    if (String(t.csat) === '5') dailyCsatMap[ds].good++;
+    else if (String(t.csat) === '1') dailyCsatMap[ds].bad++;
   });
 
   let html = '';
@@ -1313,8 +1324,11 @@ function renderTracker() {
       const slaEntry  = dailySLAMap[day.date];
       const slaPct    = slaEntry && (slaEntry.achieved + slaEntry.breached) > 0
                         ? slaEntry.achieved / (slaEntry.achieved + slaEntry.breached) * 100 : null;
-      // CSAT is weekly — show the week value on each row (greyed to indicate it's not daily)
-      const csatVal   = wCSAT;
+      // CSAT: use daily ticket-level data if available; fall back to weekly aggregate
+      const dc = dailyCsatMap[day.date];
+      const csatVal = dc && (dc.good + dc.bad) > 0
+        ? dc.good / (dc.good + dc.bad) * 100
+        : (!isFuture ? wCSAT : null); // show weekly fallback for past days only
       html += `<tr ${isFuture ? 'class="cell-dim"' : ''}>
         <td style="font-weight:600">${day.dayName}</td>
         <td>${day.date.slice(5)}</td>
@@ -1323,7 +1337,7 @@ function renderTracker() {
         <td style="font-weight:700">${fmtN(day.totalSolved)}</td>
         <td class="${colorAcc(solveAcc)}">${solveAcc != null ? fmtPct(solveAcc) : '-'}</td>
         <td class="${colorSLA(slaPct)}">${slaPct != null ? fmtPct(slaPct) : '-'}</td>
-        <td style="color:var(--mid);font-size:11px">${csatVal != null ? fmtPct(csatVal) : '-'}</td>
+        <td class="${(dc && (dc.good+dc.bad)>0) ? colorCSAT(csatVal) : ''}" style="${!(dc && (dc.good+dc.bad)>0) ? 'color:var(--mid);font-size:11px' : ''}">${csatVal != null ? fmtPct(csatVal) : '-'}</td>
       </tr>`;
     });
 
