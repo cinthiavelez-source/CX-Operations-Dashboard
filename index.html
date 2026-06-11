@@ -216,6 +216,7 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <button class="nav-btn" data-page="kpi" onclick="navTo('kpi')">✏️ Log KPIs</button>
     <button class="nav-btn" data-page="cr"    onclick="navTo('cr')">📋 Contact Reason</button>
     <button class="nav-btn" data-page="subcr" onclick="navTo('subcr')">🔍 Sub CR</button>
+    <button class="nav-btn" data-page="csat"  onclick="navTo('csat')">⭐ CSAT</button>
     <button class="nav-btn" id="btn-admin" data-page="admin" onclick="navTo('admin')" style="display:none">⚙️ Admin</button>
   </div>
   <div class="nav-right">
@@ -715,6 +716,48 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
   </div>
 </div>
 
+<!-- ── CSAT ANALYSIS PAGE ── -->
+<div id="page-csat" class="page">
+  <div class="page-header">
+    <h2>⭐ CSAT Analysis</h2>
+    <div class="toggle-group">
+      <button class="toggle-btn active" id="csat-tb-weekly"  onclick="setCsatView('weekly')">Weekly</button>
+      <button class="toggle-btn"        id="csat-tb-cr"      onclick="setCsatView('cr')">Contact Reason</button>
+      <button class="toggle-btn"        id="csat-tb-channel" onclick="setCsatView('channel')">Channel</button>
+      <button class="toggle-btn"        id="csat-tb-ltr"     onclick="setCsatView('ltr')">LTR</button>
+      <button class="toggle-btn"        id="csat-tb-segment" onclick="setCsatView('segment')">Segment</button>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="card" style="padding:14px 20px;margin-bottom:12px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">🔽 Filters</span>
+      <select id="csat-f-cr"  onchange="renderCSATView()" style="padding:6px 10px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none;background:#fff;min-width:180px">
+        <option value="">All Contact Reasons</option>
+      </select>
+      <select id="csat-f-ch"  onchange="renderCSATView()" style="padding:6px 10px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none;background:#fff;min-width:130px">
+        <option value="">All Channels</option>
+      </select>
+      <select id="csat-f-ltr" onchange="renderCSATView()" style="padding:6px 10px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none;background:#fff;min-width:130px">
+        <option value="">All LTR</option>
+      </select>
+      <select id="csat-f-seg" onchange="renderCSATView()" style="padding:6px 10px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none;background:#fff;min-width:170px">
+        <option value="">All Segments</option>
+      </select>
+      <button onclick="resetCsatFilters()" style="padding:6px 14px;border:2px solid var(--border);border-radius:7px;font-size:12px;background:#fff;cursor:pointer;font-weight:600;color:var(--mid)">Reset</button>
+    </div>
+  </div>
+
+  <!-- Summary stats -->
+  <div id="csat-summary" class="stat-grid" style="margin-bottom:16px"></div>
+
+  <!-- Table -->
+  <div class="table-wrapper">
+    <table id="csat-table"><thead></thead><tbody></tbody></table>
+  </div>
+</div>
+
 </div><!-- /main -->
 
 <!-- TOAST -->
@@ -818,7 +861,7 @@ async function apiPost(body) {
 }
 
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
-const PAGES = ['overview','tracker','upload','kpi','cr','subcr','admin'];
+const PAGES = ['overview','tracker','upload','kpi','cr','subcr','csat','admin'];
 
 async function navTo(page) {
   currentPage = page;
@@ -835,6 +878,7 @@ async function navTo(page) {
   if (page === 'kpi')       renderLogKPI();
   if (page === 'cr')        renderCR();
   if (page === 'subcr')     renderSubCR();
+  if (page === 'csat')      renderCSATView();
   if (page === 'admin')     renderAdmin();
 }
 
@@ -1157,8 +1201,10 @@ function renderWeeklyTable(tbl, summary) {
   const rows = getWeeklyData();
   if (!rows.length) { tbl.innerHTML = emptyState('No data yet. Upload your forecast and inbound CSVs to get started.'); return; }
 
-  // Summary stats
-  const recent = rows.slice(-8);
+  // Summary stats — use last 8 PAST weeks only (exclude future forecast-only rows)
+  const todayStr = new Date().toISOString().split('T')[0];
+  const pastRows = rows.filter(r => r.weekStart && _normWS(r.weekStart) <= todayStr);
+  const recent   = pastRows.slice(-8);
   const totFCST = recent.reduce((s,r)=>s+(r.totalFCST||0),0);
   const totReal = recent.reduce((s,r)=>s+(r.totalOnly||0),0);
   const avgSLA  = avg(recent.map(r=>r.sla).filter(Boolean));
@@ -1232,6 +1278,181 @@ function renderQuarterlyTable(tbl, summary) {
     tbody += '</tr>';
   });
   tbl.querySelector('tbody').innerHTML = tbody;
+}
+
+// ─── CSAT VIEW ────────────────────────────────────────────────────────────────
+let csatViewMode = 'weekly';
+
+function setCsatView(mode) {
+  csatViewMode = mode;
+  ['weekly','cr','channel','ltr','segment'].forEach(m => {
+    document.getElementById('csat-tb-'+m)?.classList.toggle('active', m === mode);
+  });
+  renderCSATView();
+}
+
+function _csatSelStr(selId) {
+  const el = document.getElementById(selId);
+  return el ? el.value : '';
+}
+
+function getFilteredCSAT() {
+  const fCR  = _csatSelStr('csat-f-cr');
+  const fCH  = _csatSelStr('csat-f-ch');
+  const fLTR = _csatSelStr('csat-f-ltr');
+  const fSEG = _csatSelStr('csat-f-seg');
+  return (cachedData.csatTickets || []).filter(t =>
+    (!fCR  || String(t.contactReason   ||'').toLowerCase() === fCR)  &&
+    (!fCH  || String(t.channel         ||'').toLowerCase() === fCH)  &&
+    (!fLTR || String(t.ltr             ||'').toLowerCase() === fLTR) &&
+    (!fSEG || String(t.lifespanSegment ||'').toLowerCase() === fSEG)
+  );
+}
+
+function resetCsatFilters() {
+  ['csat-f-cr','csat-f-ch','csat-f-ltr','csat-f-seg'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderCSATView();
+}
+
+function _csatStats(tickets) {
+  let good = 0, bad = 0, noResp = 0;
+  tickets.forEach(t => {
+    const c = String(t.csat||'').trim();
+    if (c === '5') good++;
+    else if (c === '1') bad++;
+    else noResp++;
+  });
+  const rated = good + bad;
+  const pct   = rated > 0 ? good / rated * 100 : null;
+  const resp  = tickets.length > 0 ? rated / tickets.length * 100 : null;
+  return { total: tickets.length, rated, good, bad, noResp, pct, resp };
+}
+
+function renderCSATView() {
+  if (!document.getElementById('page-csat')) return;
+
+  const allTickets = cachedData.csatTickets || [];
+  if (!allTickets.length) {
+    document.getElementById('csat-summary').innerHTML = '';
+    document.getElementById('csat-table').querySelector('thead').innerHTML = '';
+    document.getElementById('csat-table').querySelector('tbody').innerHTML =
+      `<tr><td colspan="8" style="text-align:center;padding:48px;color:var(--mid)">No CSAT data yet. Upload CSAT tickets from the Upload Data tab.</td></tr>`;
+    return;
+  }
+
+  // ── Populate filter dropdowns (unique sorted values) ──────────────────────
+  function _repopSel(selId, field, label) {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    const cur = sel.value;
+    const vals = [...new Set(allTickets.map(t => String(t[field]||'').toLowerCase()).filter(Boolean))].sort();
+    sel.innerHTML = `<option value="">${label}</option>` +
+      vals.map(v => `<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
+  }
+  _repopSel('csat-f-cr',  'contactReason',   'All Contact Reasons');
+  _repopSel('csat-f-ch',  'channel',         'All Channels');
+  _repopSel('csat-f-ltr', 'ltr',             'All LTR');
+  _repopSel('csat-f-seg', 'lifespanSegment', 'All Segments');
+
+  const tickets = getFilteredCSAT();
+  const s = _csatStats(tickets);
+
+  // ── Summary strip ──────────────────────────────────────────────────────────
+  const csatCls = s.pct != null ? colorCSAT(s.pct) : '';
+  document.getElementById('csat-summary').innerHTML = `
+    <div class="stat"><div class="stat-val ${csatCls}" style="font-size:26px">${s.pct != null ? fmtPct(s.pct) : '-'}</div><div class="stat-lbl">CSAT%</div></div>
+    <div class="stat"><div class="stat-val">${fmtN(s.total)}</div><div class="stat-lbl">Total Tickets</div></div>
+    <div class="stat"><div class="stat-val">${fmtN(s.rated)}</div><div class="stat-lbl">Rated Tickets</div></div>
+    <div class="stat"><div class="stat-val" style="color:var(--earth)">${fmtN(s.good)}</div><div class="stat-lbl">Good (5)</div></div>
+    <div class="stat"><div class="stat-val" style="color:var(--red-tx)">${fmtN(s.bad)}</div><div class="stat-lbl">Bad (1)</div></div>
+    <div class="stat"><div class="stat-val">${s.resp != null ? fmtPct(s.resp) : '-'}</div><div class="stat-lbl">Response Rate%</div></div>`;
+
+  const tbl = document.getElementById('csat-table');
+
+  // ── Table builders ─────────────────────────────────────────────────────────
+  function _buildDimTable(field, label) {
+    const agg = {};
+    tickets.forEach(t => {
+      const key = String(t[field]||'').toLowerCase() || '(blank)';
+      if (!agg[key]) agg[key] = { good:0, bad:0, total:0 };
+      agg[key].total++;
+      const c = String(t.csat||'').trim();
+      if (c==='5') agg[key].good++;
+      else if (c==='1') agg[key].bad++;
+    });
+    const rows = Object.entries(agg).map(([k,v]) => {
+      const rated = v.good + v.bad;
+      return { key:k, total:v.total, rated, good:v.good, bad:v.bad,
+               pct: rated>0 ? v.good/rated*100 : null,
+               resp: v.total>0 ? rated/v.total*100 : null };
+    }).sort((a,b) => (b.pct||0) - (a.pct||0));
+
+    tbl.querySelector('thead').innerHTML = `<tr>
+      <th style="text-align:left">${label}</th>
+      <th>Total Tickets</th><th>Rated</th>
+      <th>Good (5)</th><th>Bad (1)</th>
+      <th>CSAT%</th><th>Response%</th>
+    </tr>`;
+    tbl.querySelector('tbody').innerHTML = rows.map(r => `<tr>
+      <td style="text-align:left;font-weight:600;max-width:260px;white-space:normal">${r.key}</td>
+      <td>${fmtN(r.total)}</td>
+      <td>${fmtN(r.rated)}</td>
+      <td style="color:var(--earth);font-weight:600">${fmtN(r.good)}</td>
+      <td style="color:var(--red-tx);font-weight:600">${fmtN(r.bad)}</td>
+      <td class="${r.pct!=null?colorCSAT(r.pct):''}">${r.pct!=null?fmtPct(r.pct):'-'}</td>
+      <td>${r.resp!=null?fmtPct(r.resp):'-'}</td>
+    </tr>`).join('');
+  }
+
+  if (csatViewMode === 'weekly') {
+    // Aggregate by week number
+    const wAgg = {};
+    tickets.forEach(t => {
+      const wk  = String(t.week||'');
+      const ws  = String(t.weekStart||'');
+      if (!wk) return;
+      if (!wAgg[wk]) wAgg[wk] = { weekStart:ws, good:0, bad:0, total:0 };
+      wAgg[wk].total++;
+      const c = String(t.csat||'').trim();
+      if (c==='5') wAgg[wk].good++;
+      else if (c==='1') wAgg[wk].bad++;
+    });
+    const wRows = Object.entries(wAgg).map(([wk,v]) => {
+      const rated = v.good + v.bad;
+      return { wk:parseInt(wk), weekStart:v.weekStart, total:v.total, rated, good:v.good, bad:v.bad,
+               pct: rated>0 ? v.good/rated*100 : null,
+               resp: v.total>0 ? rated/v.total*100 : null };
+    }).sort((a,b) => a.wk - b.wk);
+
+    tbl.querySelector('thead').innerHTML = `<tr>
+      <th>Week</th><th>Week Start</th>
+      <th>Total Tickets</th><th>Rated</th>
+      <th>Good (5)</th><th>Bad (1)</th>
+      <th>CSAT%</th><th>Response%</th>
+    </tr>`;
+    tbl.querySelector('tbody').innerHTML = wRows.map(r => `<tr>
+      <td style="font-weight:700">W${r.wk}</td>
+      <td>${fmtDate(r.weekStart)}</td>
+      <td>${fmtN(r.total)}</td>
+      <td>${fmtN(r.rated)}</td>
+      <td style="color:var(--earth);font-weight:600">${fmtN(r.good)}</td>
+      <td style="color:var(--red-tx);font-weight:600">${fmtN(r.bad)}</td>
+      <td class="${r.pct!=null?colorCSAT(r.pct):''}">${r.pct!=null?fmtPct(r.pct):'-'}</td>
+      <td>${r.resp!=null?fmtPct(r.resp):'-'}</td>
+    </tr>`).join('');
+
+  } else if (csatViewMode === 'cr') {
+    _buildDimTable('contactReason', 'Contact Reason');
+  } else if (csatViewMode === 'channel') {
+    _buildDimTable('channel', 'Channel');
+  } else if (csatViewMode === 'ltr') {
+    _buildDimTable('ltr', 'LTR');
+  } else if (csatViewMode === 'segment') {
+    _buildDimTable('lifespanSegment', 'Lifespan Segment');
+  }
 }
 
 // ─── DAILY TRACKER RENDER ─────────────────────────────────────────────────────
