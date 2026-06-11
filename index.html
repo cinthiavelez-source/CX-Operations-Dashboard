@@ -1459,39 +1459,242 @@ function renderCSATView() {
 
   const tbl = document.getElementById('csat-table');
 
-  // ── Table builders ─────────────────────────────────────────────────────────
-  function _buildDimTable(field, label) {
-    const agg = {};
-    tickets.forEach(t => {
-      const key = String(t[field]||'').toLowerCase() || '(blank)';
-      if (!agg[key]) agg[key] = { good:0, bad:0, total:0 };
-      agg[key].total++;
-      const c = String(t.csat||'').trim();
-      if (c==='5') agg[key].good++;
-      else if (c==='1') agg[key].bad++;
+  // ── Shared: get sorted month keys from a ticket set ──────────────────────
+  function _monthKeys(tkts) {
+    const keys = new Set();
+    tkts.forEach(t => {
+      const ds = _normWS(t.date || t.weekStart || '');
+      if (ds) keys.add(ds.slice(0, 7));
     });
-    const rows = Object.entries(agg).map(([k,v]) => {
-      const rated = v.good + v.bad;
-      return { key:k, total:v.total, rated, good:v.good, bad:v.bad,
-               pct: rated>0 ? v.good/rated*100 : null,
-               resp: v.total>0 ? rated/v.total*100 : null };
-    }).sort((a,b) => (b.pct||0) - (a.pct||0));
+    return [...keys].sort();
+  }
+  function _mLabel(mk) {
+    const [yr, mo] = mk.split('-');
+    return MONTHS_SHORT[parseInt(mo)-1] + ' ' + yr.slice(2);
+  }
 
+  // ── Inline CSAT badge HTML (for pivot cells) ──────────────────────────────
+  function _csatBadge(pct) {
+    if (pct == null) return `<span style="color:var(--mid);font-size:11px">—</span>`;
+    const bg  = pct >= 80 ? '#D1FAE5' : pct >= 75 ? '#FEF3C7' : '#FEE2E2';
+    const col = pct >= 80 ? '#065F46' : pct >= 75 ? '#92400E' : '#991B1B';
+    return `<span style="background:${bg};color:${col};border-radius:4px;padding:2px 6px;font-size:11px;font-weight:600;display:inline-block;min-width:44px;text-align:center">${fmtPct(pct)}</span>`;
+  }
+  function _deltaHtml(pp) {
+    if (pp == null) return `<span style="color:var(--mid)">—</span>`;
+    const abs = Math.abs(pp).toFixed(1);
+    if (pp > 0.05)  return `<span style="color:#059669;font-weight:600">▲ ${abs}pp</span>`;
+    if (pp < -0.05) return `<span style="color:#DC2626;font-weight:600">▼ ${abs}pp</span>`;
+    return `<span style="color:var(--mid)">= ${abs}pp</span>`;
+  }
+
+  // ── MoM pivot: Channel / LTR / Segment ───────────────────────────────────
+  function _buildMoMPivot(field, label) {
+    const months = _monthKeys(tickets);
+    // dimAgg[dimVal][monthKey] = { good, bad, total }
+    const dimAgg = {};
+    const allAgg = {}; // overall across dims per month
+    tickets.forEach(t => {
+      const dimVal = String(t[field]||'').toLowerCase().trim() || '(blank)';
+      const ds = _normWS(t.date || t.weekStart || '');
+      if (!ds) return;
+      const mk = ds.slice(0, 7);
+      if (!dimAgg[dimVal])      dimAgg[dimVal] = {};
+      if (!dimAgg[dimVal][mk])  dimAgg[dimVal][mk] = { good:0, bad:0, total:0 };
+      if (!allAgg[mk])          allAgg[mk] = { good:0, bad:0, total:0 };
+      const c = String(t.csat||'').trim();
+      const isGood = c==='5', isBad = c==='1';
+      dimAgg[dimVal][mk].total++;
+      allAgg[mk].total++;
+      if (isGood) { dimAgg[dimVal][mk].good++; allAgg[mk].good++; }
+      if (isBad)  { dimAgg[dimVal][mk].bad++;  allAgg[mk].bad++;  }
+    });
+
+    // Per-dim: overall CSAT and MoM delta (last two months)
+    const dimRows = Object.entries(dimAgg).map(([dimVal, mmap]) => {
+      let totGood=0, totBad=0, totAll=0;
+      Object.values(mmap).forEach(v => { totGood+=v.good; totBad+=v.bad; totAll+=v.total; });
+      const rated = totGood+totBad;
+      const overallPct = rated>0 ? totGood/rated*100 : null;
+      const lastTwo = months.slice(-2);
+      let momDelta = null;
+      if (lastTwo.length===2) {
+        const cur  = mmap[lastTwo[1]]; const prv = mmap[lastTwo[0]];
+        const cp = cur&&(cur.good+cur.bad)>0 ? cur.good/(cur.good+cur.bad)*100 : null;
+        const pp = prv&&(prv.good+prv.bad)>0 ? prv.good/(prv.good+prv.bad)*100 : null;
+        if (cp!=null && pp!=null) momDelta = cp - pp;
+      }
+      return { dimVal, mmap, overallPct, momDelta, vol:totAll };
+    }).sort((a,b) => (b.overallPct||0) - (a.overallPct||0));
+
+    // Footer: all-months totals
+    let fGood=0,fBad=0,fAll=0;
+    Object.values(allAgg).forEach(v=>{fGood+=v.good;fBad+=v.bad;fAll+=v.total;});
+    const fRated=fGood+fBad; const fPct=fRated>0?fGood/fRated*100:null;
+    const lastTwo=months.slice(-2);
+    let fDelta=null;
+    if(lastTwo.length===2){
+      const c=allAgg[lastTwo[1]]; const p=allAgg[lastTwo[0]];
+      const cp=c&&(c.good+c.bad)>0?c.good/(c.good+c.bad)*100:null;
+      const pp=p&&(p.good+p.bad)>0?p.good/(p.good+p.bad)*100:null;
+      if(cp!=null&&pp!=null) fDelta=cp-pp;
+    }
+
+    const pivotStyle = `border-left:1px solid var(--border)`;
     tbl.querySelector('thead').innerHTML = `<tr>
-      <th style="text-align:left">${label}</th>
-      <th>Total Tickets</th><th>Rated</th>
-      <th>Good (5)</th><th>Bad (1)</th>
-      <th>CSAT%</th><th>Response%</th>
+      <th style="text-align:left;min-width:130px">${label}</th>
+      ${months.map(mk=>`<th style="text-align:center">${_mLabel(mk)}</th>`).join('')}
+      <th style="text-align:center;${pivotStyle}">Overall</th>
+      <th style="text-align:center">MoM Δ</th>
+      <th style="text-align:center">Vol</th>
     </tr>`;
-    tbl.querySelector('tbody').innerHTML = rows.map(r => `<tr>
-      <td style="text-align:left;font-weight:600;max-width:260px;white-space:normal">${r.key}</td>
-      <td>${fmtN(r.total)}</td>
-      <td>${fmtN(r.rated)}</td>
-      <td style="color:var(--earth);font-weight:600">${fmtN(r.good)}</td>
-      <td style="color:var(--red-tx);font-weight:600">${fmtN(r.bad)}</td>
-      <td class="${r.pct!=null?colorCSAT(r.pct):''}">${r.pct!=null?fmtPct(r.pct):'-'}</td>
-      <td>${r.resp!=null?fmtPct(r.resp):'-'}</td>
+    const bodyRows = dimRows.map(r => `<tr>
+      <td style="font-weight:600;max-width:160px;white-space:normal">${r.dimVal}</td>
+      ${months.map(mk => {
+        const v = r.mmap[mk]; const rated=(v?.good||0)+(v?.bad||0);
+        const pct = rated>0 ? v.good/rated*100 : null;
+        return `<td style="text-align:center;padding:6px 8px">${_csatBadge(pct)}</td>`;
+      }).join('')}
+      <td style="text-align:center;${pivotStyle}">${_csatBadge(r.overallPct)}</td>
+      <td style="text-align:center">${_deltaHtml(r.momDelta)}</td>
+      <td style="text-align:center;color:var(--mid);font-size:12px">${fmtN(r.vol)}</td>
     </tr>`).join('');
+    const footerRow = `<tr style="background:var(--surface2)">
+      <td style="font-weight:600;color:var(--mid)">All ${label.toLowerCase()}s</td>
+      ${months.map(mk => {
+        const v=allAgg[mk]||{}; const rated=(v.good||0)+(v.bad||0);
+        const pct=rated>0?v.good/rated*100:null;
+        return `<td style="text-align:center;padding:6px 8px">${_csatBadge(pct)}</td>`;
+      }).join('')}
+      <td style="text-align:center;${pivotStyle}">${_csatBadge(fPct)}</td>
+      <td style="text-align:center">${_deltaHtml(fDelta)}</td>
+      <td style="text-align:center;color:var(--mid);font-size:12px">${fmtN(fAll)}</td>
+    </tr>`;
+    tbl.querySelector('tbody').innerHTML = bodyRows + footerRow;
+
+    // Legend
+    _renderMoMlegend('Month-over-month CSAT% pivot — MoM Δ = last vs prior month');
+  }
+
+  // ── MoM pivot: Contact Reason (3-metric cells) ────────────────────────────
+  function _buildCRMoMPivot() {
+    const months = _monthKeys(tickets);
+    // crAgg[crKey][monthKey] = { good, bad, total (= # surveys received) }
+    const crAgg  = {};
+    const allAgg = {};
+    tickets.forEach(t => {
+      const cr = String(t.contactReason||'').toLowerCase().trim() || '(blank)';
+      const ds = _normWS(t.date || t.weekStart || '');
+      if (!ds) return;
+      const mk = ds.slice(0, 7);
+      if (!crAgg[cr])     crAgg[cr] = {};
+      if (!crAgg[cr][mk]) crAgg[cr][mk] = { good:0, bad:0, total:0 };
+      if (!allAgg[mk])    allAgg[mk]    = { good:0, bad:0, total:0 };
+      const c = String(t.csat||'').trim();
+      crAgg[cr][mk].total++;
+      allAgg[mk].total++;
+      if (c==='5') { crAgg[cr][mk].good++; allAgg[mk].good++; }
+      if (c==='1') { crAgg[cr][mk].bad++;  allAgg[mk].bad++;  }
+    });
+
+    // Per-CR: overall stats
+    const crRows = Object.entries(crAgg).map(([cr, mmap]) => {
+      let totGood=0,totBad=0,totAll=0;
+      Object.values(mmap).forEach(v=>{totGood+=v.good;totBad+=v.bad;totAll+=v.total;});
+      const rated=totGood+totBad;
+      const overallPct=rated>0?totGood/rated*100:null;
+      const lastTwo=months.slice(-2);
+      let momDelta=null;
+      if(lastTwo.length===2){
+        const cur=mmap[lastTwo[1]]; const prv=mmap[lastTwo[0]];
+        const cp=cur&&(cur.good+cur.bad)>0?cur.good/(cur.good+cur.bad)*100:null;
+        const pp=prv&&(prv.good+prv.bad)>0?prv.good/(prv.good+prv.bad)*100:null;
+        if(cp!=null&&pp!=null) momDelta=cp-pp;
+      }
+      return { cr, mmap, overallPct, momDelta, totAll };
+    }).sort((a,b) => b.totAll - a.totAll); // sort by survey volume desc
+
+    // Grand total per month (for % of total)
+    const monthTotal = {}; // mk → total surveys across all CRs
+    Object.values(allAgg).forEach((v,_,arr) => {}); // already built
+    months.forEach(mk => { monthTotal[mk] = allAgg[mk]?.total || 0; });
+    const grandTotal = crRows.reduce((s,r)=>s+r.totAll,0);
+
+    // 3-metric cell helper: CSAT badge + count + % of month total
+    function _crCell(v, mthTotal) {
+      if (!v || v.total===0) return `<td style="text-align:center;padding:5px 8px;color:var(--mid);font-size:11px">—</td>`;
+      const rated = v.good+v.bad;
+      const pct   = rated>0 ? v.good/rated*100 : null;
+      const share = mthTotal>0 ? v.total/mthTotal*100 : null;
+      return `<td style="text-align:center;padding:5px 8px;vertical-align:top">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:1px">
+          ${_csatBadge(pct)}
+          <span style="font-size:10px;font-weight:600;color:var(--text)">${fmtN(v.total)}</span>
+          <span style="font-size:10px;color:var(--mid)">${share!=null?share.toFixed(1)+'%':'—'}</span>
+        </div>
+      </td>`;
+    }
+
+    const pivotStyle = 'border-left:1px solid var(--border)';
+    tbl.querySelector('thead').innerHTML = `<tr>
+      <th style="text-align:left;min-width:150px">Contact reason</th>
+      ${months.map(mk=>`<th style="text-align:center;min-width:80px"><div>${_mLabel(mk)}</div><div style="font-size:10px;font-weight:400;color:var(--mid)">CSAT · # · share</div></th>`).join('')}
+      <th style="text-align:center;${pivotStyle}">Overall</th>
+      <th style="text-align:center">MoM Δ</th>
+      <th style="text-align:center">Total surveys</th>
+      <th style="text-align:center">Share %</th>
+    </tr>`;
+
+    const bodyRows = crRows.map(r => `<tr>
+      <td style="font-weight:600;max-width:180px;white-space:normal;vertical-align:middle">${r.cr}</td>
+      ${months.map(mk => _crCell(r.mmap[mk], monthTotal[mk])).join('')}
+      <td style="text-align:center;vertical-align:middle;${pivotStyle}">${_csatBadge(r.overallPct)}</td>
+      <td style="text-align:center;vertical-align:middle">${_deltaHtml(r.momDelta)}</td>
+      <td style="text-align:center;vertical-align:middle;font-weight:600">${fmtN(r.totAll)}</td>
+      <td style="text-align:center;vertical-align:middle;font-weight:600">${grandTotal>0?(r.totAll/grandTotal*100).toFixed(1)+'%':'—'}</td>
+    </tr>`).join('');
+
+    // Footer row
+    let fGood=0,fBad=0,fAll=0;
+    Object.values(allAgg).forEach(v=>{fGood+=v.good;fBad+=v.bad;fAll+=v.total;});
+    const fRated=fGood+fBad; const fPct=fRated>0?fGood/fRated*100:null;
+    const lastTwo=months.slice(-2); let fDelta=null;
+    if(lastTwo.length===2){
+      const c=allAgg[lastTwo[1]]; const p=allAgg[lastTwo[0]];
+      const cp=c&&(c.good+c.bad)>0?c.good/(c.good+c.bad)*100:null;
+      const pp=p&&(p.good+p.bad)>0?p.good/(p.good+p.bad)*100:null;
+      if(cp!=null&&pp!=null) fDelta=cp-pp;
+    }
+    const footerRow = `<tr style="background:var(--surface2)">
+      <td style="font-weight:600;color:var(--mid)">All reasons</td>
+      ${months.map(mk => {
+        const v=allAgg[mk]||{}; const mthT=monthTotal[mk]||0;
+        return _crCell(v.total>0?v:null, mthT);
+      }).join('')}
+      <td style="text-align:center;vertical-align:middle;${pivotStyle}">${_csatBadge(fPct)}</td>
+      <td style="text-align:center;vertical-align:middle">${_deltaHtml(fDelta)}</td>
+      <td style="text-align:center;vertical-align:middle;font-weight:600">${fmtN(fAll)}</td>
+      <td style="text-align:center;vertical-align:middle;font-weight:600">100%</td>
+    </tr>`;
+    tbl.querySelector('tbody').innerHTML = bodyRows + footerRow;
+
+    _renderMoMlegend('Contact reason MoM — cell shows CSAT% · # surveys · % of that month\'s total · MoM Δ = last vs prior month');
+  }
+
+  // ── Legend injected below the table ──────────────────────────────────────
+  function _renderMoMlegend(note) {
+    let leg = document.getElementById('csat-mom-legend');
+    if (!leg) {
+      leg = document.createElement('div');
+      leg.id = 'csat-mom-legend';
+      leg.style.cssText = 'display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;align-items:center';
+      tbl.parentNode.insertAdjacentElement('afterend', leg);
+    }
+    leg.innerHTML = `
+      <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--mid)"><span style="width:10px;height:10px;border-radius:3px;background:#D1FAE5;display:inline-block"></span>≥ 80%</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--mid)"><span style="width:10px;height:10px;border-radius:3px;background:#FEF3C7;display:inline-block"></span>75–79%</span>
+      <span style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--mid)"><span style="width:10px;height:10px;border-radius:3px;background:#FEE2E2;display:inline-block"></span>&lt; 75%</span>
+      <span style="font-size:11px;color:var(--mid);margin-left:8px">${note}</span>`;
   }
 
   if (csatViewMode === 'weekly') {
@@ -1570,13 +1773,19 @@ function renderCSATView() {
     </tr>`).join('');
 
   } else if (csatViewMode === 'cr') {
-    _buildDimTable('contactReason', 'Contact Reason');
+    _buildCRMoMPivot();
   } else if (csatViewMode === 'channel') {
-    _buildDimTable('channel', 'Channel');
+    _buildMoMPivot('channel', 'Channel');
   } else if (csatViewMode === 'ltr') {
-    _buildDimTable('ltr', 'LTR');
+    _buildMoMPivot('ltr', 'LTR');
   } else if (csatViewMode === 'segment') {
-    _buildDimTable('lifespanSegment', 'Lifespan Segment');
+    _buildMoMPivot('lifespanSegment', 'Lifespan Segment');
+  }
+
+  // Hide legend when switching to non-pivot views
+  if (['weekly','monthly'].includes(csatViewMode)) {
+    const leg = document.getElementById('csat-mom-legend');
+    if (leg) leg.innerHTML = '';
   }
 }
 
