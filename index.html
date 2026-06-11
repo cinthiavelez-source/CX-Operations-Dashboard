@@ -507,6 +507,36 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
       </div>
     </div>
 
+    <!-- Contact Reason + Sub CR (combined) -->
+    <div class="upload-card">
+      <div class="format-badge">CONTACT REASON · WEEKLY</div>
+      <h3>📊 Contact Reason &amp; Sub CR</h3>
+      <p>One file populates both tabs. Upload weekly — re-upload history anytime, no duplicates.</p>
+      <details class="fmt-box">
+        <summary>📋 Expected format</summary>
+        <div class="fmt-box-body">
+          <table class="fmt-tbl"><thead><tr><th>Breakdown I</th><th>Breakdown II</th><th>28-Dec-25</th><th>04-Jan-26</th><th>...</th></tr></thead>
+          <tbody>
+            <tr><td>account management</td><td>account management - cancel subscription</td><td>1,273</td><td>1,555</td><td>...</td></tr>
+            <tr><td>account management</td><td>account management - pause account</td><td>261</td><td>274</td><td>...</td></tr>
+            <tr><td>delivery experience</td><td>delivery experience - missing bag</td><td>410</td><td>388</td><td>...</td></tr>
+          </tbody></table>
+          <div style="font-size:10px;color:var(--mid);margin-top:6px">UTF-16 TSV · Breakdown I = parent contact reason · Breakdown II = sub-reason · date columns = weekly Sundays</div>
+        </div>
+      </details>
+      <div class="upload-zone" id="zone-cr-subcr" ondragover="dragOver(event,'zone-cr-subcr')" ondragleave="dragLeave('zone-cr-subcr')" ondrop="dropFile(event,'cr-subcr')">
+        <input type="file" accept=".csv" id="file-crsubcr" onchange="fileChosen(event,'cr-subcr')">
+        <div class="uf-icon">📂</div>
+        <strong id="fname-cr-subcr">Choose file or drag here</strong>
+        <p>to download deep dive table.csv</p>
+      </div>
+      <div id="preview-cr-subcr" class="upload-preview" style="display:none"></div>
+      <div class="upload-actions">
+        <button class="btn btn-primary" id="ubtn-cr-subcr" onclick="doUpload('cr-subcr')" disabled>Upload</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearUpload('cr-subcr')">Clear</button>
+      </div>
+    </div>
+
     <!-- Monthly Forecast -->
     <div class="upload-card">
       <div class="format-badge">FORECAST · MONTHLY</div>
@@ -656,19 +686,8 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
       <button onclick="resetCRRange()" style="padding:5px 10px;border:2px solid var(--border);border-radius:6px;font-size:12px;background:#fff;cursor:pointer;font-weight:600;color:var(--mid)">Last 5 wks</button>
     </div>
   </div>
-  <div id="cr-upload-inline" class="card" style="margin-bottom:16px">
-    <h3>⬆️ Upload Contact Reason CSV</h3>
-    <p style="font-size:12px;color:var(--mid);margin-bottom:12px">Wide-format CSV — <em>Contact Reason.csv</em> — upload weekly every Sunday.</p>
-    <div class="upload-zone" id="zone-cr" ondragover="dragOver(event,'zone-cr')" ondragleave="dragLeave('zone-cr')" ondrop="dropFile(event,'cr')">
-      <input type="file" accept=".csv" id="file-cr" onchange="fileChosen(event,'cr')">
-      <div class="uf-icon">📂</div>
-      <strong id="fname-cr">Choose file or drag here</strong>
-    </div>
-    <div id="preview-cr" class="upload-preview" style="display:none"></div>
-    <div class="upload-actions">
-      <button class="btn btn-primary" id="ubtn-cr" onclick="doUpload('cr')" disabled>Upload</button>
-      <button class="btn btn-secondary btn-sm" onclick="clearUpload('cr')">Clear</button>
-    </div>
+  <div class="card" style="margin-bottom:16px;background:var(--bg-page);border:1.5px dashed var(--border)">
+    <p style="font-size:12px;color:var(--mid);margin:0">📤 Upload Contact Reason &amp; Sub CR data from the <strong>Upload Data</strong> tab using the combined deep dive export.</p>
   </div>
   <div class="table-wrapper">
     <table id="cr-table"><thead></thead><tbody></tbody></table>
@@ -690,30 +709,8 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
       <button onclick="resetSubCRRange()" style="padding:5px 10px;border:2px solid var(--border);border-radius:6px;font-size:12px;background:#fff;cursor:pointer;font-weight:600;color:var(--mid)">Last 5 wks</button>
     </div>
   </div>
-  <div id="subcr-upload-inline" class="card" style="margin-bottom:16px">
-    <h3>⬆️ Upload Sub Contact Reason CSV</h3>
-    <p style="font-size:12px;color:var(--mid);margin-bottom:8px">From BI: export <strong>Sub Contact Reason deep dive</strong> — NOT the channel breakdown. Upload any time with history (no duplicates).</p>
-    <div class="fmt-box" style="margin-bottom:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--primary);margin-bottom:6px">📋 REQUIRED FORMAT — UTF-16 TSV (tab-separated)</div>
-      <table class="fmt-tbl"><thead><tr><th>Breakdown I</th><th>Breakdown II</th><th>01-Jan-26</th><th>02-Jan-26</th><th>...</th></tr></thead>
-      <tbody>
-        <tr><td>Account Management</td><td>Cancel Account</td><td>45</td><td>62</td><td>...</td></tr>
-        <tr><td>Account Management</td><td>Pause Account</td><td>18</td><td>24</td><td>...</td></tr>
-        <tr><td>Delivery Experience</td><td>Missing Bag</td><td>31</td><td>28</td><td>...</td></tr>
-        <tr><td>Delivery Experience</td><td>Wrong Address</td><td>12</td><td>9</td><td>...</td></tr>
-      </tbody></table>
-      <div style="font-size:10px;color:var(--mid);margin-top:6px">⚠️ Breakdown I = parent reason &nbsp;|&nbsp; Breakdown II = sub-reason (not "Total") &nbsp;|&nbsp; date columns = daily</div>
-    </div>
-    <div class="upload-zone" id="zone-subcr" ondragover="dragOver(event,'zone-subcr')" ondragleave="dragLeave('zone-subcr')" ondrop="dropFile(event,'subcr')">
-      <input type="file" accept=".csv" id="file-subcr" onchange="fileChosen(event,'subcr')">
-      <div class="uf-icon">📂</div>
-      <strong id="fname-subcr">Choose file or drag here</strong>
-    </div>
-    <div id="preview-subcr" class="upload-preview" style="display:none"></div>
-    <div class="upload-actions">
-      <button class="btn btn-primary" id="ubtn-subcr" onclick="doUpload('subcr')" disabled>Upload</button>
-      <button class="btn btn-secondary btn-sm" onclick="clearUpload('subcr')">Clear</button>
-    </div>
+  <div class="card" style="margin-bottom:16px;background:var(--bg-page);border:1.5px dashed var(--border)">
+    <p style="font-size:12px;color:var(--mid);margin:0">📤 Upload Contact Reason &amp; Sub CR data from the <strong>Upload Data</strong> tab using the combined deep dive export.</p>
   </div>
   <div class="table-wrapper">
     <table id="subcr-table"><thead></thead><tbody></tbody></table>
@@ -1557,6 +1554,7 @@ function processUploadFile(file, type) {
       if (type === 'csat')              records = parseCSATCSV(text);
       if (type === 'cr')                records = parseContactReasonCSV(text, 'cr');
       if (type === 'subcr')             records = parseContactReasonCSV(text, 'subcr');
+      if (type === 'cr-subcr')          records = parseCRSubCRCSV(text); // returns { crRecords, subCrRecords }
     } catch(parseErr) {
       records = [];
       const preview2 = document.getElementById('preview-'+type);
@@ -1567,11 +1565,21 @@ function processUploadFile(file, type) {
     const preview = document.getElementById('preview-'+type);
     if (preview) {
       preview.style.display = 'block';
-      preview.textContent = `✅ Parsed ${records.length} records. Ready to upload.`;
-      if (records.length === 0) preview.textContent = '⚠️ No records parsed. Check file format.';
+      if (type === 'cr-subcr') {
+        const r = records || {};
+        const crN = (r.crRecords||[]).length, subN = (r.subCrRecords||[]).length;
+        if (!crN && !subN) preview.textContent = '⚠️ No records parsed. Check file format.';
+        else preview.textContent = `✅ Parsed ${crN} CR records · ${subN} Sub CR records. Ready to upload.`;
+      } else {
+        preview.textContent = `✅ Parsed ${records.length} records. Ready to upload.`;
+        if (records.length === 0) preview.textContent = '⚠️ No records parsed. Check file format.';
+      }
     }
     const btn = document.getElementById('ubtn-'+type);
-    if (btn) btn.disabled = records.length === 0;
+    if (btn) {
+      if (type === 'cr-subcr') btn.disabled = !((records.crRecords||[]).length || (records.subCrRecords||[]).length);
+      else btn.disabled = records.length === 0;
+    }
   };
   bufReader.readAsArrayBuffer(file);
 }
@@ -1582,12 +1590,48 @@ function clearUpload(type) {
   if (preview) { preview.style.display='none'; preview.textContent=''; }
   const btn  = document.getElementById('ubtn-'+type); if(btn) btn.disabled=true;
   const name = document.getElementById('fname-'+type); if(name) name.textContent='Choose file or drag here';
-  const fi   = document.getElementById('file-'+type.split('-')[0]);
+  // file input id uses shortened type (e.g. 'cr-subcr' → 'crsubcr', 'only-inbound' → 'only')
+  const fileIdMap = { 'cr-subcr':'crsubcr', 'only-inbound':'only', 'forecast-daily':'forecastdaily',
+                      'forecast-monthly':'forecastmonthly', 'inbound-daily':'inbounddaily',
+                      'inbound-total':'inboundtotal' };
+  const fiId = fileIdMap[type] || type.split('-')[0];
+  const fi   = document.getElementById('file-'+fiId);
   if (fi) fi.value = '';
 }
 
 async function doUpload(type) {
   const records = parsedFiles[type];
+
+  // Combined CR+SubCR upload: two sequential API calls
+  if (type === 'cr-subcr') {
+    const r = records || {};
+    const crRecs  = r.crRecords    || [];
+    const subRecs = r.subCrRecords || [];
+    if (!crRecs.length && !subRecs.length) { showToast('No records to upload', '#F59E0B'); return; }
+    showLoading(true, `Uploading ${crRecs.length} CR + ${subRecs.length} Sub CR records…`);
+    try {
+      let crAdded=0, crUpd=0, subAdded=0, subUpd=0;
+      if (crRecs.length) {
+        const res1 = await apiPost({ action:'uploadCR', records:crRecs });
+        if (res1.error) throw new Error(res1.error);
+        crAdded = res1.added||0; crUpd = res1.updated||0;
+      }
+      if (subRecs.length) {
+        const res2 = await apiPost({ action:'uploadSubCR', records:subRecs });
+        if (res2.error) throw new Error(res2.error);
+        subAdded = res2.added||0; subUpd = res2.updated||0;
+      }
+      showToast(`✅ CR: ${crAdded}+${crUpd} · Sub CR: ${subAdded}+${subUpd}`, '#10B981');
+      clearUpload(type);
+      await apiFetch();
+      if (currentPage === 'cr')    renderCR();
+      if (currentPage === 'subcr') renderSubCR();
+    } catch(err) {
+      showToast('Upload failed: ' + err.message, '#EF4444');
+    } finally { showLoading(false); }
+    return;
+  }
+
   if (!records || !records.length) { showToast('No records to upload', '#F59E0B'); return; }
   const actionMap = {
     'only-inbound':      { action:'uploadInboundD',        key:'records' },
@@ -2061,6 +2105,64 @@ function parseContactReasonCSV(text, mode) {
   return results;
 }
 
+// ─── COMBINED CR + SUB CR PARSER ────────────────────────────────────────────
+// Format: UTF-16 TSV
+//   Header: Breakdown I \t Breakdown II \t <weekly-date-1> \t <weekly-date-2> ...
+//   Rows:   <parent CR>  \t <sub CR name> \t count1 \t count2 ...
+//   Blank B1+B2 row = grand total → skip
+// Returns: { crRecords: [{reason, weekStart, count}], subCrRecords: [{subReason, parentReason, weekStart, count}] }
+function parseCRSubCRCSV(text) {
+  const firstLine = text.split(/\r?\n/)[0] || '';
+  const sep = firstLine.includes('\t') ? '\t' : ',';
+  const lines = parseTSV(text, sep);
+  if (lines.length < 2) return { crRecords: [], subCrRecords: [] };
+  const header = lines[0];
+
+  // Parse weekly date headers (columns 2+)
+  const weekDates = header.slice(2).map(h => {
+    const d = parseFlexDate((h || '').trim().replace(/﻿/g, ''));
+    if (!d) return null;
+    // Snap to Sunday of that week (CookUnity weeks = Sun–Sat)
+    return weekStartSunStr(d);
+  });
+
+  // crAgg: parentReason → { weekStart → count }
+  const crAgg = {};
+  const subCrRecords = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const row    = lines[i];
+    const b1     = (row[0] || '').trim().replace(/﻿/g, '').toLowerCase();
+    const b2     = (row[1] || '').trim().replace(/﻿/g, '').toLowerCase();
+    if (!b1 && !b2) continue; // grand total row
+    if (!b1 || !b2) continue; // malformed
+
+    if (!crAgg[b1]) crAgg[b1] = {};
+
+    header.slice(2).forEach((_, idx) => {
+      const ws = weekDates[idx];
+      if (!ws) return;
+      const raw   = String(row[2 + idx] || '').replace(/,/g, '').replace(/﻿/g, '').trim();
+      const count = parseFloat(raw) || 0;
+      if (!count) return;
+      // Aggregate sub-rows into parent CR
+      crAgg[b1][ws] = (crAgg[b1][ws] || 0) + count;
+      // Sub CR: one record per row per week
+      subCrRecords.push({ subReason: b2, parentReason: b1, weekStart: ws, count });
+    });
+  }
+
+  // Flatten CR aggregates
+  const crRecords = [];
+  for (const [reason, weekMap] of Object.entries(crAgg)) {
+    for (const [weekStart, count] of Object.entries(weekMap)) {
+      crRecords.push({ reason, weekStart, count });
+    }
+  }
+
+  return { crRecords, subCrRecords };
+}
+
 // Tab (or custom separator) parser — simpler than parseCSV since BI exports don't quote fields
 function parseTSV(text, sep='\t') {
   const lines = [];
@@ -2113,7 +2215,7 @@ function renderSubCR() {
   const tbl = document.getElementById('subcr-table');
   const data = cachedData.subCR;
   if (!data.length) {
-    tbl.querySelector('tbody').innerHTML = `<tr><td colspan="99"><div class="empty-state"><p>No sub contact reason data.</p><small>Upload the Sub CR CSV above.</small></div></td></tr>`;
+    tbl.querySelector('tbody').innerHTML = `<tr><td colspan="99"><div class="empty-state"><p>No sub contact reason data.</p><small>Upload the deep dive CSV from the <strong>Upload Data</strong> tab.</small></div></td></tr>`;
     tbl.querySelector('thead').innerHTML = '';
     return;
   }
