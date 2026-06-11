@@ -722,6 +722,7 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <h2>⭐ CSAT Analysis</h2>
     <div class="toggle-group">
       <button class="toggle-btn active" id="csat-tb-weekly"  onclick="setCsatView('weekly')">Weekly</button>
+      <button class="toggle-btn"        id="csat-tb-monthly" onclick="setCsatView('monthly')">Monthly</button>
       <button class="toggle-btn"        id="csat-tb-cr"      onclick="setCsatView('cr')">Contact Reason</button>
       <button class="toggle-btn"        id="csat-tb-channel" onclick="setCsatView('channel')">Channel</button>
       <button class="toggle-btn"        id="csat-tb-ltr"     onclick="setCsatView('ltr')">LTR</button>
@@ -733,20 +734,22 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
   <div class="card" style="padding:14px 20px;margin-bottom:12px">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <span style="font-size:11px;font-weight:700;color:var(--mid);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap">🔽 Filters</span>
-      <select id="csat-f-cr"  onchange="renderCSATView()" style="padding:6px 10px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none;background:#fff;min-width:180px">
+      <select id="csat-f-cr" onchange="onCsatCRChange()" style="padding:6px 10px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none;background:#fff;min-width:180px">
         <option value="">All Contact Reasons</option>
       </select>
-      <select id="csat-f-ch"  onchange="renderCSATView()" style="padding:6px 10px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none;background:#fff;min-width:130px">
-        <option value="">All Channels</option>
+      <select id="csat-f-subcr" onchange="renderCSATView()" style="padding:6px 10px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none;background:#fff;min-width:220px">
+        <option value="">All Sub Contact Reasons</option>
       </select>
-      <select id="csat-f-ltr" onchange="renderCSATView()" style="padding:6px 10px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none;background:#fff;min-width:130px">
-        <option value="">All LTR</option>
-      </select>
-      <select id="csat-f-seg" onchange="renderCSATView()" style="padding:6px 10px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none;background:#fff;min-width:170px">
-        <option value="">All Segments</option>
-      </select>
+      <span style="font-size:12px;color:var(--mid);white-space:nowrap;margin-left:4px">From</span>
+      <input type="date" id="csat-f-from" onchange="snapCsatFromWeek();renderCSATView()"
+             style="padding:5px 8px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none">
+      <span style="font-size:12px;color:var(--mid);white-space:nowrap">To</span>
+      <input type="date" id="csat-f-to" onchange="snapCsatToWeek();renderCSATView()"
+             style="padding:5px 8px;border:2px solid var(--border);border-radius:7px;font-size:12px;outline:none">
       <button onclick="resetCsatFilters()" style="padding:6px 14px;border:2px solid var(--border);border-radius:7px;font-size:12px;background:#fff;cursor:pointer;font-weight:600;color:var(--mid)">Reset</button>
     </div>
+    <!-- Week-range hint shown after date selection -->
+    <div id="csat-date-hint" style="font-size:11px;color:var(--mid);margin-top:6px;display:none"></div>
   </div>
 
   <!-- Summary stats -->
@@ -1285,7 +1288,7 @@ let csatViewMode = 'weekly';
 
 function setCsatView(mode) {
   csatViewMode = mode;
-  ['weekly','cr','channel','ltr','segment'].forEach(m => {
+  ['weekly','monthly','cr','channel','ltr','segment'].forEach(m => {
     document.getElementById('csat-tb-'+m)?.classList.toggle('active', m === mode);
   });
   renderCSATView();
@@ -1293,27 +1296,107 @@ function setCsatView(mode) {
 
 function _csatSelStr(selId) {
   const el = document.getElementById(selId);
-  return el ? el.value : '';
+  return el ? el.value.trim() : '';
+}
+
+// ── Week-snap helpers for date inputs ────────────────────────────────────────
+// "From" snaps to the Sunday of the chosen week (week start)
+function snapCsatFromWeek() {
+  const el = document.getElementById('csat-f-from');
+  if (!el || !el.value) return;
+  const d = new Date(el.value + 'T12:00:00');
+  const dow = d.getDay(); // 0=Sun
+  d.setDate(d.getDate() - dow);
+  el.value = d.toISOString().split('T')[0];
+  _updateCsatDateHint();
+}
+// "To" snaps to the Saturday of the chosen week (week end)
+function snapCsatToWeek() {
+  const el = document.getElementById('csat-f-to');
+  if (!el || !el.value) return;
+  const d = new Date(el.value + 'T12:00:00');
+  const dow = d.getDay(); // 0=Sun
+  d.setDate(d.getDate() + (6 - dow));
+  el.value = d.toISOString().split('T')[0];
+  _updateCsatDateHint();
+}
+function _updateCsatDateHint() {
+  const hint = document.getElementById('csat-date-hint');
+  if (!hint) return;
+  const from = _csatSelStr('csat-f-from');
+  const to   = _csatSelStr('csat-f-to');
+  if (!from && !to) { hint.style.display = 'none'; return; }
+  const parts = [];
+  if (from) parts.push('From: ' + fmtDate(from) + ' (Sun)');
+  if (to)   parts.push('To: '   + fmtDate(to)   + ' (Sat)');
+  hint.textContent = '📅 Week range — ' + parts.join('  ·  ');
+  hint.style.display = 'block';
+}
+
+// Called when Contact Reason dropdown changes — repopulates Sub CR and re-renders
+function onCsatCRChange() {
+  _repopSubCRSel();
+  renderCSATView();
+}
+
+// Repopulate Sub CR dropdown based on selected parent CR
+function _repopSubCRSel() {
+  const sel = document.getElementById('csat-f-subcr');
+  if (!sel) return;
+  const fCR = _csatSelStr('csat-f-cr');
+  const allTickets = cachedData.csatTickets || [];
+  // Sub-reasons: contactReason values that belong to the selected parent CR.
+  // A sub-reason is identified as a contactReason whose "parent" part matches fCR.
+  // Parent part = everything before " - " (if present), otherwise the whole value.
+  const subVals = [...new Set(
+    allTickets
+      .map(t => String(t.contactReason || '').toLowerCase().trim())
+      .filter(cr => {
+        if (!cr) return false;
+        if (!fCR) return true; // no parent filter → show all
+        const parent = cr.includes(' - ') ? cr.split(' - ')[0].trim() : cr;
+        return parent === fCR;
+      })
+  )].sort();
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">All Sub Contact Reasons</option>` +
+    subVals.map(v => `<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
 }
 
 function getFilteredCSAT() {
-  const fCR  = _csatSelStr('csat-f-cr');
-  const fCH  = _csatSelStr('csat-f-ch');
-  const fLTR = _csatSelStr('csat-f-ltr');
-  const fSEG = _csatSelStr('csat-f-seg');
-  return (cachedData.csatTickets || []).filter(t =>
-    (!fCR  || String(t.contactReason   ||'').toLowerCase() === fCR)  &&
-    (!fCH  || String(t.channel         ||'').toLowerCase() === fCH)  &&
-    (!fLTR || String(t.ltr             ||'').toLowerCase() === fLTR) &&
-    (!fSEG || String(t.lifespanSegment ||'').toLowerCase() === fSEG)
-  );
+  const fCR    = _csatSelStr('csat-f-cr');
+  const fSubCR = _csatSelStr('csat-f-subcr');
+  const fFrom  = _csatSelStr('csat-f-from');
+  const fTo    = _csatSelStr('csat-f-to');
+
+  return (cachedData.csatTickets || []).filter(t => {
+    const cr = String(t.contactReason || '').toLowerCase().trim();
+
+    // Parent CR filter — match against the part before " - "
+    if (fCR) {
+      const parent = cr.includes(' - ') ? cr.split(' - ')[0].trim() : cr;
+      if (parent !== fCR) return false;
+    }
+    // Sub CR filter — exact match on full contactReason value
+    if (fSubCR && cr !== fSubCR) return false;
+
+    // Date range filter — compare against ticket date (weekStart as fallback)
+    if (fFrom || fTo) {
+      const ds = _normWS(t.date || t.weekStart || '');
+      if (fFrom && ds < fFrom) return false;
+      if (fTo   && ds > fTo)   return false;
+    }
+    return true;
+  });
 }
 
 function resetCsatFilters() {
-  ['csat-f-cr','csat-f-ch','csat-f-ltr','csat-f-seg'].forEach(id => {
+  ['csat-f-cr','csat-f-subcr','csat-f-from','csat-f-to'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  const hint = document.getElementById('csat-date-hint');
+  if (hint) hint.style.display = 'none';
   renderCSATView();
 }
 
@@ -1343,19 +1426,23 @@ function renderCSATView() {
     return;
   }
 
-  // ── Populate filter dropdowns (unique sorted values) ──────────────────────
-  function _repopSel(selId, field, label) {
-    const sel = document.getElementById(selId);
+  // ── Populate Contact Reason dropdown (parent CRs only) ────────────────────
+  function _repopCRSel() {
+    const sel = document.getElementById('csat-f-cr');
     if (!sel) return;
     const cur = sel.value;
-    const vals = [...new Set(allTickets.map(t => String(t[field]||'').toLowerCase()).filter(Boolean))].sort();
-    sel.innerHTML = `<option value="">${label}</option>` +
-      vals.map(v => `<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
+    // Derive unique parent reasons (part before " - ", or whole value if no dash)
+    const parents = [...new Set(
+      allTickets.map(t => {
+        const cr = String(t.contactReason || '').toLowerCase().trim();
+        return cr.includes(' - ') ? cr.split(' - ')[0].trim() : cr;
+      }).filter(Boolean)
+    )].sort();
+    sel.innerHTML = `<option value="">All Contact Reasons</option>` +
+      parents.map(v => `<option value="${v}"${v===cur?' selected':''}>${v}</option>`).join('');
   }
-  _repopSel('csat-f-cr',  'contactReason',   'All Contact Reasons');
-  _repopSel('csat-f-ch',  'channel',         'All Channels');
-  _repopSel('csat-f-ltr', 'ltr',             'All LTR');
-  _repopSel('csat-f-seg', 'lifespanSegment', 'All Segments');
+  _repopCRSel();
+  _repopSubCRSel(); // keeps sub CR in sync with selected parent CR
 
   const tickets = getFilteredCSAT();
   const s = _csatStats(tickets);
@@ -1436,6 +1523,44 @@ function renderCSATView() {
     tbl.querySelector('tbody').innerHTML = wRows.map(r => `<tr>
       <td style="font-weight:700">W${r.wk}</td>
       <td>${fmtDate(r.weekStart)}</td>
+      <td>${fmtN(r.total)}</td>
+      <td>${fmtN(r.rated)}</td>
+      <td style="color:var(--earth);font-weight:600">${fmtN(r.good)}</td>
+      <td style="color:var(--red-tx);font-weight:600">${fmtN(r.bad)}</td>
+      <td class="${r.pct!=null?colorCSAT(r.pct):''}">${r.pct!=null?fmtPct(r.pct):'-'}</td>
+      <td>${r.resp!=null?fmtPct(r.resp):'-'}</td>
+    </tr>`).join('');
+
+  } else if (csatViewMode === 'monthly') {
+    // Aggregate by calendar month (YYYY-MM) from ticket date field
+    const mAgg = {};
+    tickets.forEach(t => {
+      const ds = _normWS(t.date || t.weekStart || '');
+      if (!ds) return;
+      const mKey = ds.slice(0, 7); // "YYYY-MM"
+      if (!mAgg[mKey]) mAgg[mKey] = { good:0, bad:0, total:0 };
+      mAgg[mKey].total++;
+      const c = String(t.csat||'').trim();
+      if (c==='5') mAgg[mKey].good++;
+      else if (c==='1') mAgg[mKey].bad++;
+    });
+    const mRows = Object.entries(mAgg).map(([mk, v]) => {
+      const rated = v.good + v.bad;
+      const [yr, mo] = mk.split('-');
+      const label = MONTHS_SHORT[parseInt(mo)-1] + ' ' + yr;
+      return { mk, label, total:v.total, rated, good:v.good, bad:v.bad,
+               pct:  rated>0 ? v.good/rated*100 : null,
+               resp: v.total>0 ? rated/v.total*100 : null };
+    }).sort((a,b) => a.mk.localeCompare(b.mk));
+
+    tbl.querySelector('thead').innerHTML = `<tr>
+      <th style="text-align:left">Month</th>
+      <th>Total Tickets</th><th>Rated</th>
+      <th>Good (5)</th><th>Bad (1)</th>
+      <th>CSAT%</th><th>Response%</th>
+    </tr>`;
+    tbl.querySelector('tbody').innerHTML = mRows.map(r => `<tr>
+      <td style="text-align:left;font-weight:700">${r.label}</td>
       <td>${fmtN(r.total)}</td>
       <td>${fmtN(r.rated)}</td>
       <td style="color:var(--earth);font-weight:600">${fmtN(r.good)}</td>
