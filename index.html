@@ -473,32 +473,28 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
       </div>
     </div>
 
-    <!-- CSAT Tickets Daily -->
+    <!-- CSAT Tickets -->
     <div class="upload-card highlight">
-      <div class="format-badge">DAILY · AUTO CSAT%</div>
+      <div class="format-badge">TICKET-LEVEL · AUTO CSAT%</div>
       <h3>⭐ CSAT Tickets</h3>
-      <p>Ticket-level CSV with CSAT score (5=good, 1=bad), contact reason, and channel. Tag with a week to auto-compute weekly CSAT%.</p>
-      <div style="margin-bottom:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <label style="font-size:11px;font-weight:700;color:var(--mid)">TAG WEEK (optional)</label>
-        <select id="csat-week-select" style="padding:5px 10px;border:2px solid var(--border);border-radius:6px;font-size:12px;outline:none">
-          <option value="">— no week tag —</option>
-        </select>
-      </div>
+      <p>Ticket-level export with created date. Week and month are auto-derived — no manual tagging needed. Re-upload history anytime, no duplicates.</p>
       <details class="fmt-box">
         <summary>📋 Expected format</summary>
         <div class="fmt-box-body">
-          <table class="fmt-tbl"><thead><tr><th>TICKET_ID</th><th>Csat</th><th>Contact Reason</th><th>Channel</th><th>LTR</th><th>LIFESPAN_SEGMENT</th></tr></thead>
-          <tbody><tr><td>2377415</td><td></td><td>meal experience - quality issues</td><td>email</td><td>5-10k</td><td>&gt; 52 weeks</td></tr>
-          <tr><td>2395209</td><td>5</td><td>order management</td><td>chat</td><td>less than 5k</td><td>&gt; 52 weeks</td></tr>
-          <tr><td>2406448</td><td>1</td><td>billing - payment</td><td>email</td><td>10-25k</td><td>5-12 weeks</td></tr></tbody></table>
-          <p style="font-size:10px;color:var(--mid);margin-top:6px">Csat: <strong>5</strong> = good · <strong>1</strong> = bad · <em>empty</em> = no response (excluded from %)</p>
+          <table class="fmt-tbl"><thead><tr><th>TICKET_ID</th><th>TICKET_CREATED_DATE</th><th>Csat</th><th>Contact Reason</th><th>Channel</th><th>LTR</th><th>LIFESPAN_SEGMENT_AT_TICKET</th></tr></thead>
+          <tbody>
+            <tr><td>1905724</td><td>2/8/2026</td><td></td><td>delivery experience - order tracking</td><td>email</td><td>10-25k</td><td>&gt; 52 weeks</td></tr>
+            <tr><td>1841485</td><td>1/27/2026</td><td>5</td><td>delivery experience - order tracking</td><td>sms</td><td>more than 25k</td><td>&gt; 52 weeks</td></tr>
+            <tr><td>2406448</td><td>3/15/2026</td><td>1</td><td>billing - payment</td><td>email</td><td>10-25k</td><td>5-12 weeks</td></tr>
+          </tbody></table>
+          <p style="font-size:10px;color:var(--mid);margin-top:6px">UTF-16 TSV · Csat: <strong>5</strong> = good · <strong>1</strong> = bad · <em>empty</em> = no response (excluded from %) · date format: M/D/YYYY</p>
         </div>
       </details>
       <div class="upload-zone" id="zone-csat" ondragover="dragOver(event,'zone-csat')" ondragleave="dragLeave('zone-csat')" ondrop="dropFile(event,'csat')">
         <input type="file" accept=".csv" id="file-csat" onchange="fileChosen(event,'csat')">
         <div class="uf-icon">📂</div>
         <strong id="fname-csat">Choose file or drag here</strong>
-        <p>CSAT Daily.csv</p>
+        <p>deep dive table_CUSTOMER_CONVERSATION_COHORT_DETAI_data.csv</p>
       </div>
       <div id="preview-csat" class="upload-preview" style="display:none"></div>
       <div class="upload-actions">
@@ -1975,25 +1971,52 @@ function parseCSATCSV(text) {
   const lines = parseTSV(text, sep);
   if (lines.length < 2) return [];
 
-  // Get week tag from the selector
-  const wkSel = document.getElementById('csat-week-select');
-  let taggedWeek = '', taggedWS = '';
-  if (wkSel && wkSel.value) {
-    try { const p = JSON.parse(wkSel.value); taggedWeek = p.week; taggedWS = p.weekStart; } catch(e) {}
+  // Detect format by inspecting header
+  const header = lines[0].map(h => (h||'').trim().replace(/﻿/g,'').toLowerCase());
+  const hasDateCol = header.includes('ticket_created_date');
+
+  // Column indices — flexible by name
+  const idx = (name) => header.findIndex(h => h === name || h.includes(name));
+  const iId   = idx('ticket_id');
+  const iDate = hasDateCol ? idx('ticket_created_date') : -1;
+  const iCsat = hasDateCol ? idx('csat') : 1;
+  const iCR   = hasDateCol ? idx('contact reason') : 2;
+  const iCh   = hasDateCol ? idx('channel') : 3;
+  const iLtr  = hasDateCol ? idx('ltr') : 4;
+  const iSeg  = hasDateCol ? header.findIndex(h => h.includes('lifespan')) : 5;
+
+  // Parse M/D/YYYY date string → 'YYYY-MM-DD'
+  function parseMDY(s) {
+    if (!s) return null;
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!m) return null;
+    return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
   }
 
   const results = [];
   for (let i = 1; i < lines.length; i++) {
     const row = lines[i];
-    const ticketId = (row[0]||'').trim().replace(/﻿/g,'');
+    const ticketId = (row[iId >= 0 ? iId : 0]||'').trim().replace(/﻿/g,'');
     if (!ticketId) continue;
-    const csat           = (row[1]||'').trim();
-    const contactReason  = (row[2]||'').trim().toLowerCase();
-    const channel        = (row[3]||'').trim().toLowerCase();
-    const ltr            = (row[4]||'').trim();
-    const lifespanSeg    = (row[5]||'').trim();
-    results.push({ ticketId, csat, contactReason, channel, ltr, lifespanSegment:lifespanSeg,
-      week: taggedWeek, weekStart: taggedWS });
+
+    let date = '', week = '', weekStart = '';
+    if (iDate >= 0 && row[iDate]) {
+      date = parseMDY((row[iDate]||'').trim());
+      if (date) {
+        const d = new Date(date + 'T12:00:00');
+        week      = String(isoWeekSun(d));
+        weekStart = weekStartSunStr(d);
+      }
+    }
+
+    const csat          = (row[iCsat >= 0 ? iCsat : 1]||'').trim();
+    const contactReason = (row[iCR   >= 0 ? iCR   : 2]||'').trim().toLowerCase();
+    const channel       = (row[iCh   >= 0 ? iCh   : 3]||'').trim().toLowerCase();
+    const ltr           = (row[iLtr  >= 0 ? iLtr  : 4]||'').trim();
+    const lifespanSeg   = (row[iSeg  >= 0 ? iSeg  : 5]||'').trim();
+
+    results.push({ ticketId, date, csat, contactReason, channel, ltr,
+      lifespanSegment: lifespanSeg, week, weekStart });
   }
   return results;
 }
