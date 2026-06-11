@@ -2458,9 +2458,12 @@ function parseCRSubCRCSV(text) {
     return weekStartSunStr(d);
   });
 
-  // crAgg: parentReason → { weekStart → count }
-  const crAgg = {};
-  const subCrRecords = [];
+  // crAgg:    parentReason → { weekStart → count }
+  // subCrAgg: "subReason|||parentReason|||weekStart" → { subReason, parentReason, weekStart, count }
+  // Both aggregate daily columns into weekly totals before pushing — fixes daily-column files where
+  // pushing one record per cell caused the backend upsert to overwrite each day with the next.
+  const crAgg    = {};
+  const subCrAgg = {};
 
   for (let i = 1; i < lines.length; i++) {
     const row    = lines[i];
@@ -2477,20 +2480,23 @@ function parseCRSubCRCSV(text) {
       const raw   = String(row[2 + idx] || '').replace(/,/g, '').replace(/﻿/g, '').trim();
       const count = parseFloat(raw) || 0;
       if (!count) return;
-      // Aggregate sub-rows into parent CR
+      // Aggregate sub-rows into parent CR total
       crAgg[b1][ws] = (crAgg[b1][ws] || 0) + count;
-      // Sub CR: one record per row per week
-      subCrRecords.push({ subReason: b2, parentReason: b1, weekStart: ws, count });
+      // Aggregate sub CR — same key used by backend upsert — so daily cells sum correctly
+      const subKey = `${b2}|||${b1}|||${ws}`;
+      if (!subCrAgg[subKey]) subCrAgg[subKey] = { subReason: b2, parentReason: b1, weekStart: ws, count: 0 };
+      subCrAgg[subKey].count += count;
     });
   }
 
-  // Flatten CR aggregates
+  // Flatten both aggregates
   const crRecords = [];
   for (const [reason, weekMap] of Object.entries(crAgg)) {
     for (const [weekStart, count] of Object.entries(weekMap)) {
       crRecords.push({ reason, weekStart, count });
     }
   }
+  const subCrRecords = Object.values(subCrAgg);
 
   return { crRecords, subCrRecords };
 }
