@@ -296,27 +296,29 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
       </div>
     </div>
 
-    <!-- Inbound + Outbound (long format) -->
+    <!-- Inbound + Outbound (daily format) — populates Daily_InbOut sheet → Inb+Out column -->
     <div class="upload-card highlight">
-      <div class="format-badge">WEEKLY</div>
+      <div class="format-badge">DAILY</div>
       <h3>📥 Inbound — Including Outbound</h3>
-      <p>Long-format CSV with Ticket channel, Week of Year, Tickets columns.<br>
+      <p>Daily CSV — one row per channel per day, counting <strong>inbound + outbound</strong>. Stored in <em>Daily_InbOut</em> sheet. Re-upload anytime; existing dates update, no duplicates.<br>
          <strong>Twilio SMS + Messaging → Live</strong> | all others → Email</p>
       <details class="fmt-box">
         <summary>📋 Expected format</summary>
         <div class="fmt-box-body">
-          <table class="fmt-tbl"><thead><tr><th>Ticket channel</th><th>Ticket created - Week of Year</th><th>Tickets</th></tr></thead>
-          <tbody><tr><td>Twilio SMS</td><td>1</td><td>338</td></tr>
-          <tr><td>Messaging</td><td>1</td><td>456</td></tr>
-          <tr><td>Email</td><td>1</td><td>1,471</td></tr></tbody></table>
-          <a class="fmt-dl" onclick="dlTemplate('inbound_total_template.csv','Ticket channel,Ticket created - Week of Year,Tickets\nTwilio SMS,1,338\nMessaging,1,456\nEmail,1,1471\nTwilio SMS,2,290\nMessaging,2,412\nEmail,2,1388\n')">📥 Download template</a>
+          <table class="fmt-tbl"><thead><tr><th>Ticket channel</th><th>Ticket created - Date</th><th>Tickets</th></tr></thead>
+          <tbody><tr><td>Twilio SMS</td><td>2026-01-05</td><td>310</td></tr>
+          <tr><td>Messaging</td><td>2026-01-05</td><td>390</td></tr>
+          <tr><td>Email</td><td>2026-01-05</td><td>1,250</td></tr>
+          <tr><td>Voice</td><td>2026-01-05</td><td>18</td></tr></tbody></table>
+          <p style="font-size:10px;color:var(--mid);margin-top:6px">Same file structure as Solved Tickets — one row per channel per day. Aggregates into weekly <strong>Inb+Out</strong> automatically.</p>
+          <a class="fmt-dl" onclick="dlTemplate('inbound_total_daily_template.csv','Ticket channel,Ticket created - Date,Tickets\nTwilio SMS,2026-01-05,310\nMessaging,2026-01-05,390\nEmail,2026-01-05,1250\nVoice,2026-01-05,18\nTwilio SMS,2026-01-06,280\nMessaging,2026-01-06,350\nEmail,2026-01-06,1100\n')">📥 Download template</a>
         </div>
       </details>
       <div class="upload-zone" id="zone-total" ondragover="dragOver(event,'zone-total')" ondragleave="dragLeave('zone-total')" ondrop="dropFile(event,'inbound-total')">
         <input type="file" accept=".csv" id="file-total" onchange="fileChosen(event,'inbound-total')">
         <div class="uf-icon">📂</div>
         <strong id="fname-inbound-total">Choose file or drag here</strong>
-        <p>Inbound per channel (inbound + outbound count).csv</p>
+        <p>CM_Inbound_per_channel_*.csv (inbound + outbound)</p>
       </div>
       <div id="preview-inbound-total" class="upload-preview" style="display:none"></div>
       <div class="upload-actions">
@@ -735,7 +737,7 @@ const MONTHS_FULL  = ['January','February','March','April','May','June','July','
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 // ─── STATE ──────────────────────────────────────────────────────────────────
-let cachedData   = { forecasts:[], forecastsM:[], forecastsD:[], inbound:[], solved:[], inboundD:[], weeklyKPI:[], monthlyKPI:[], quarterlyKPI:[], slaData:[], csatTickets:[], cr:[], subCR:[], config:{} };
+let cachedData   = { forecasts:[], forecastsM:[], forecastsD:[], inbound:[], solved:[], inboundD:[], inboundT:[], weeklyKPI:[], monthlyKPI:[], quarterlyKPI:[], slaData:[], csatTickets:[], cr:[], subCR:[], config:{} };
 let cachedRole   = 'viewer';
 let currentPage  = 'overview';
 let ovMode       = 'weekly';
@@ -782,6 +784,7 @@ async function apiFetch() {
     cachedData.inbound    = data.inbound    || [];
     cachedData.solved     = data.solved     || [];
     cachedData.inboundD   = data.inboundD   || [];
+    cachedData.inboundT   = data.inboundT   || [];
     cachedData.weeklyKPI   = data.weeklyKPI   || [];
     cachedData.monthlyKPI  = data.monthlyKPI  || [];
     cachedData.quarterlyKPI= data.quarterlyKPI|| [];
@@ -837,7 +840,7 @@ async function navTo(page) {
 
 // ─── DATA COMPUTATION ────────────────────────────────────────────────────────
 function getWeeklyData() {
-  const { forecasts, inbound, inboundD, solved, weeklyKPI, slaData, csatTickets } = cachedData;
+  const { forecasts, inbound, inboundD, inboundT, solved, weeklyKPI, slaData, csatTickets } = cachedData;
   // Key = week number only (string) — so Sunday/Monday weekStart mismatches never split a week into two rows
   const fmap = {}, imap = {}, kmap = {}, svWeek = {}, wsMap = {};
 
@@ -848,23 +851,64 @@ function getWeeklyData() {
   });
   weeklyKPI.forEach(k => { kmap[String(k.week)] = k; });
 
-  // Aggregate daily inbound → weekly buckets
-  // Track which weeks have daily data so we never mix with legacy Weekly_Inbound for the same week
-  const dailyWeeks = new Set();
-  inboundD.forEach(d => {
+  // Step 1: Aggregate Daily_Inbound → weekly chatOnly/emailOnly/totalOnly
+  const dailyOnlyWeeks = new Set();
+  (inboundD || []).forEach(d => {
     const k = String(d.week);
-    dailyWeeks.add(k);
+    dailyOnlyWeeks.add(k);
     if (!wsMap[k]) wsMap[k] = _normWS(d.weekStart);
-    if (!imap[k]) imap[k] = { chatOnly:0, emailOnly:0, totalOnly:0, chatTotal:'', emailTotal:'', totalTotal:'' };
+    if (!imap[k]) imap[k] = { chatOnly:0, emailOnly:0, totalOnly:0, chatTotal:0, emailTotal:0, totalTotal:0 };
     imap[k].chatOnly  = (imap[k].chatOnly  || 0) + n(d.chatOnly);
     imap[k].emailOnly = (imap[k].emailOnly || 0) + n(d.emailOnly);
     imap[k].totalOnly = (imap[k].totalOnly || 0) + n(d.totalOnly);
   });
 
-  // Load legacy Weekly_Inbound ONLY for weeks that have no daily data (avoids double-counting)
-  inbound.forEach(i => {
+  // Step 2: Aggregate Daily_InbOut → weekly chatTotal/emailTotal/totalTotal (Inb+Out column)
+  const dailyTotalWeeks = new Set();
+  (inboundT || []).forEach(d => {
+    const k = String(d.week);
+    dailyTotalWeeks.add(k);
+    if (!wsMap[k]) wsMap[k] = _normWS(d.weekStart);
+    if (!imap[k]) imap[k] = { chatOnly:0, emailOnly:0, totalOnly:0, chatTotal:0, emailTotal:0, totalTotal:0 };
+    imap[k].chatTotal  = (imap[k].chatTotal  || 0) + n(d.chatTotal);
+    imap[k].emailTotal = (imap[k].emailTotal || 0) + n(d.emailTotal);
+    imap[k].totalTotal = (imap[k].totalTotal || 0) + n(d.totalTotal);
+  });
+
+  // Step 3: Fall back to legacy Weekly_Inbound for any fields not yet covered by daily data
+  (inbound || []).forEach(i => {
     const k = String(i.week);
-    if (!dailyWeeks.has(k)) imap[k] = i;  // skip if daily data already covers this week
+    const hasOnly  = dailyOnlyWeeks.has(k);
+    const hasTotal = dailyTotalWeeks.has(k);
+    if (!hasOnly && !hasTotal) {
+      // No daily data at all — use weekly row entirely
+      if (!imap[k]) imap[k] = i;
+      else {
+        if (!imap[k].totalOnly)  imap[k].totalOnly  = n(i.totalOnly);
+        if (!imap[k].chatOnly)   imap[k].chatOnly   = n(i.chatOnly);
+        if (!imap[k].emailOnly)  imap[k].emailOnly  = n(i.emailOnly);
+        if (!imap[k].totalTotal) imap[k].totalTotal = n(i.totalTotal);
+        if (!imap[k].chatTotal)  imap[k].chatTotal  = n(i.chatTotal);
+        if (!imap[k].emailTotal) imap[k].emailTotal = n(i.emailTotal);
+      }
+    } else if (hasOnly && !hasTotal) {
+      // Only-inbound covered by daily; fill total from weekly fallback if still 0
+      if (!imap[k]) imap[k] = { chatOnly:0, emailOnly:0, totalOnly:0, chatTotal:0, emailTotal:0, totalTotal:0 };
+      if (!imap[k].totalTotal) {
+        imap[k].chatTotal  = n(i.chatTotal);
+        imap[k].emailTotal = n(i.emailTotal);
+        imap[k].totalTotal = n(i.totalTotal);
+      }
+    } else if (!hasOnly && hasTotal) {
+      // Total covered by daily; fill only-inbound from weekly fallback if still 0
+      if (!imap[k]) imap[k] = { chatOnly:0, emailOnly:0, totalOnly:0, chatTotal:0, emailTotal:0, totalTotal:0 };
+      if (!imap[k].totalOnly) {
+        imap[k].chatOnly  = n(i.chatOnly);
+        imap[k].emailOnly = n(i.emailOnly);
+        imap[k].totalOnly = n(i.totalOnly);
+      }
+    }
+    // If both daily sets cover this week, skip the weekly row entirely
   });
 
   // Aggregate daily solved → weekly
@@ -1540,7 +1584,7 @@ function processUploadFile(file, type) {
               : 2026;
     try {
       if (type === 'only-inbound')      records = parseOnlyInboundCSV(text, year);
-      if (type === 'inbound-total')     records = parseInboundTotalCSV(text, year);
+      if (type === 'inbound-total')     records = parseDailyChannelCSV(text, 'inbound-total');
       if (type === 'solved')            records = parseDailyChannelCSV(text, 'solved');
       if (type === 'inbound-daily')     records = parseDailyChannelCSV(text, 'inbound');
       if (type === 'forecast')          records = parseForecastCSV(text, year);
@@ -1657,7 +1701,7 @@ async function doUpload(type) {
 
   const actionMap = {
     'only-inbound':      { action:'uploadInboundD',        key:'records' },
-    'inbound-total':     { action:'uploadInbound',         key:'records' },
+    'inbound-total':     { action:'uploadInboundTotal',    key:'records' }, // → Daily_InbOut sheet
     'solved':            { action:'uploadSolved',          key:'records' },
     'inbound-daily':     { action:'uploadInboundD',        key:'records' },
     'forecast':          { action:'uploadForecast',        key:'records' },
@@ -1796,6 +1840,10 @@ function parseDailyChannelCSV(text, mode='solved') {
     if (mode==='solved') {
       results.push({ date, week:isoWeekSun(d), weekStart:ws,
         chatSolved:live, emailSolved:email, totalSolved:total });
+    } else if (mode==='inbound-total') {
+      // Daily inbound+outbound → feeds Daily_InbOut sheet → Inb+Out column
+      results.push({ date, week:isoWeekSun(d), weekStart:ws,
+        chatTotal:live, emailTotal:email, totalTotal:total });
     } else {
       results.push({ date, week:isoWeekSun(d), weekStart:ws,
         chatOnly:live, emailOnly:email, totalOnly:total,
