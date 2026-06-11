@@ -94,6 +94,12 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
 .cell-dim{color:var(--light)!important}
 .week-summary-row td{background:#FFF0E6!important;font-weight:700!important;font-size:12px}
 .week-summary-row td:first-child{background:#FF6A14!important;color:#fff!important}
+.cr-group-hdr{cursor:pointer}
+.cr-group-hdr td{background:#2d3035!important;color:#fff!important;font-weight:700!important;font-size:12px!important;letter-spacing:.3px}
+.cr-group-hdr td:first-child{background:#AA0061!important;color:#fff!important;font-size:11px!important;letter-spacing:.5px;text-transform:uppercase}
+.cr-group-hdr:hover td{filter:brightness(1.15)}
+.cr-child{transition:opacity .15s}
+.cr-child.hidden{display:none}
 .empty-state{text-align:center;padding:48px 20px;color:var(--mid)}
 .empty-state p{font-size:15px;margin-bottom:8px}
 .empty-state small{font-size:12px}
@@ -1780,8 +1786,7 @@ function _renderCRTable(tbl, data, labelKey, parentKey, displayWeeks) {
 
   // ── Header ──
   let thead = '<tr>';
-  if (parentKey) thead += '<th style="text-align:left;min-width:140px">Parent Reason</th>';
-  thead += '<th style="text-align:left;min-width:200px">Contact Reason</th>';
+  thead += `<th style="text-align:left;min-width:${parentKey ? '220px' : '200px'}">Contact Reason</th>`;
   displayWeeks.forEach(w => {
     const wn   = _crWeekNum(w);
     const sun  = _parseWS(w);
@@ -1789,36 +1794,102 @@ function _renderCRTable(tbl, data, labelKey, parentKey, displayWeeks) {
     thead += `<th colspan="2" class="group-header">W${wn} <span style="font-weight:400;opacity:.7">(${sunLbl})</span></th>`;
   });
   thead += '</tr><tr>';
-  if (parentKey) thead += '<th></th>';
   thead += '<th></th>';
   displayWeeks.forEach(() => { thead += '<th style="min-width:60px">Count</th><th style="min-width:72px">Share%</th>'; });
   thead += '</tr>';
   tbl.querySelector('thead').innerHTML = thead;
 
-  // ── Sort by most recent week count desc ──
   const lastW = displayWeeks[displayWeeks.length - 1];
-  const rows = Object.entries(map).sort((a, b) => (b[1][lastW]||0) - (a[1][lastW]||0));
-
-  // ── Body ──
+  const colSpan = 1 + displayWeeks.length * 2;
   let tbody = '';
-  rows.forEach(([lbl, rec]) => {
-    tbody += '<tr>';
-    if (parentKey) tbody += `<td style="text-align:left;font-size:11px;color:var(--mid)">${rec.parentReason || ''}</td>`;
-    tbody += `<td style="text-align:left;font-weight:600">${lbl}</td>`;
-    displayWeeks.forEach((w, wi) => {
-      const cnt = rec[w] || 0;
-      const tot = weekTotals[w] || 0;
-      const pct = tot ? (cnt / tot * 100) : 0;
-      const cls = cnt ? wowColor(lbl, wi) : '';
-      tbody += `<td>${cnt ? fmtN(cnt) : '-'}</td>`;
-      tbody += `<td class="${cls}">${cnt ? fmtPct(pct) : '-'}</td>`;
+
+  if (parentKey) {
+    // ── GROUPED mode: cluster sub-reasons under collapsible parent headers ──
+    // Build group totals: parentReason → { week → count }
+    const groupTotals = {};
+    const groupSubs   = {}; // parentReason → [ [lbl, rec], ... ]
+    Object.entries(map).forEach(([lbl, rec]) => {
+      const p = rec.parentReason || '(other)';
+      if (!groupTotals[p]) groupTotals[p] = {};
+      if (!groupSubs[p])   groupSubs[p] = [];
+      groupSubs[p].push([lbl, rec]);
+      displayWeeks.forEach(w => {
+        groupTotals[p][w] = (groupTotals[p][w] || 0) + (rec[w] || 0);
+      });
+      allWeeksSorted.forEach(w => {
+        if (!displayWeeks.includes(w)) {
+          groupTotals[p][w] = (groupTotals[p][w] || 0) + (rec[w] || 0);
+        }
+      });
     });
-    tbody += '</tr>';
-  });
+
+    // Sort groups by most recent week total desc
+    const sortedGroups = Object.keys(groupTotals).sort((a, b) =>
+      (groupTotals[b][lastW]||0) - (groupTotals[a][lastW]||0));
+
+    let gIdx = 0;
+    sortedGroups.forEach(parent => {
+      const gId = 'grp-' + (gIdx++);
+      const gTot = groupTotals[parent];
+
+      // Group header row
+      tbody += `<tr class="cr-group-hdr" onclick="toggleCRGroup('${gId}',this)">`;
+      tbody += `<td style="text-align:left;padding-left:8px">▾ ${parent}</td>`;
+      displayWeeks.forEach((w, wi) => {
+        const cnt = gTot[w] || 0;
+        const tot = weekTotals[w] || 0;
+        const pct = tot ? (cnt / tot * 100) : 0;
+        // WoW for group header
+        let cls = '';
+        if (wi > 0) {
+          const prevW = displayWeeks[wi-1];
+          const prevTot = weekTotals[prevW] || 0;
+          if (cnt && prevTot) {
+            const diff = pct - (gTot[prevW]||0)/prevTot*100;
+            cls = diff > 0.5 ? 'cell-green' : diff < -0.5 ? 'cell-red' : 'cell-yellow';
+          }
+        }
+        tbody += `<td>${cnt ? fmtN(cnt) : '-'}</td><td class="${cls}">${cnt ? fmtPct(pct) : '-'}</td>`;
+      });
+      tbody += '</tr>';
+
+      // Sub-reason rows
+      const subs = groupSubs[parent].sort((a, b) => (b[1][lastW]||0) - (a[1][lastW]||0));
+      subs.forEach(([lbl, rec]) => {
+        tbody += `<tr class="cr-child" data-group="${gId}">`;
+        tbody += `<td style="text-align:left;padding-left:22px;font-size:12px">${lbl}</td>`;
+        displayWeeks.forEach((w, wi) => {
+          const cnt = rec[w] || 0;
+          const tot = weekTotals[w] || 0;
+          const pct = tot ? (cnt / tot * 100) : 0;
+          const cls = cnt ? wowColor(lbl, wi) : '';
+          tbody += `<td style="font-size:12px">${cnt ? fmtN(cnt) : '-'}</td>`;
+          tbody += `<td class="${cls}" style="font-size:12px">${cnt ? fmtPct(pct) : '-'}</td>`;
+        });
+        tbody += '</tr>';
+      });
+    });
+
+  } else {
+    // ── FLAT mode (Contact Reason page) ──
+    const rows = Object.entries(map).sort((a, b) => (b[1][lastW]||0) - (a[1][lastW]||0));
+    rows.forEach(([lbl, rec]) => {
+      tbody += '<tr>';
+      tbody += `<td style="text-align:left;font-weight:600">${lbl}</td>`;
+      displayWeeks.forEach((w, wi) => {
+        const cnt = rec[w] || 0;
+        const tot = weekTotals[w] || 0;
+        const pct = tot ? (cnt / tot * 100) : 0;
+        const cls = cnt ? wowColor(lbl, wi) : '';
+        tbody += `<td>${cnt ? fmtN(cnt) : '-'}</td>`;
+        tbody += `<td class="${cls}">${cnt ? fmtPct(pct) : '-'}</td>`;
+      });
+      tbody += '</tr>';
+    });
+  }
 
   // ── Totals row ──
   tbody += '<tr style="background:#FFF0E6;font-weight:700">';
-  if (parentKey) tbody += '<td></td>';
   tbody += '<td style="text-align:left;color:var(--brand)">TOTAL</td>';
   displayWeeks.forEach(w => {
     tbody += `<td>${fmtN(weekTotals[w])}</td><td>100%</td>`;
@@ -1826,6 +1897,15 @@ function _renderCRTable(tbl, data, labelKey, parentKey, displayWeeks) {
   tbody += '</tr>';
 
   tbl.querySelector('tbody').innerHTML = tbody;
+}
+
+function toggleCRGroup(gId, hdrEl) {
+  const tbl = hdrEl.closest('table');
+  const children = tbl.querySelectorAll(`tr.cr-child[data-group="${gId}"]`);
+  const isOpen = !children[0]?.classList.contains('hidden');
+  children.forEach(r => r.classList.toggle('hidden', isOpen));
+  const arrow = hdrEl.querySelector('td:first-child');
+  if (arrow) arrow.textContent = arrow.textContent.replace(isOpen ? '▾' : '▸', isOpen ? '▸' : '▾');
 }
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
