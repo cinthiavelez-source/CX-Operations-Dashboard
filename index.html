@@ -692,7 +692,18 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
   </div>
   <div id="subcr-upload-inline" class="card" style="margin-bottom:16px">
     <h3>⬆️ Upload Sub Contact Reason CSV</h3>
-    <p style="font-size:12px;color:var(--mid);margin-bottom:12px">Wide-format CSV — <em>Sub CR.csv</em> — upload weekly every Sunday.</p>
+    <p style="font-size:12px;color:var(--mid);margin-bottom:8px">From BI: export <strong>Sub Contact Reason deep dive</strong> — NOT the channel breakdown. Upload any time with history (no duplicates).</p>
+    <div class="fmt-box" style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--primary);margin-bottom:6px">📋 REQUIRED FORMAT — UTF-16 TSV (tab-separated)</div>
+      <table class="fmt-tbl"><thead><tr><th>Breakdown I</th><th>Breakdown II</th><th>01-Jan-26</th><th>02-Jan-26</th><th>...</th></tr></thead>
+      <tbody>
+        <tr><td>Account Management</td><td>Cancel Account</td><td>45</td><td>62</td><td>...</td></tr>
+        <tr><td>Account Management</td><td>Pause Account</td><td>18</td><td>24</td><td>...</td></tr>
+        <tr><td>Delivery Experience</td><td>Missing Bag</td><td>31</td><td>28</td><td>...</td></tr>
+        <tr><td>Delivery Experience</td><td>Wrong Address</td><td>12</td><td>9</td><td>...</td></tr>
+      </tbody></table>
+      <div style="font-size:10px;color:var(--mid);margin-top:6px">⚠️ Breakdown I = parent reason &nbsp;|&nbsp; Breakdown II = sub-reason (not "Total") &nbsp;|&nbsp; date columns = daily</div>
+    </div>
     <div class="upload-zone" id="zone-subcr" ondragover="dragOver(event,'zone-subcr')" ondragleave="dragLeave('zone-subcr')" ondrop="dropFile(event,'subcr')">
       <input type="file" accept=".csv" id="file-subcr" onchange="fileChosen(event,'subcr')">
       <div class="uf-icon">📂</div>
@@ -1924,40 +1935,108 @@ function parseCSATCSV(text) {
 }
 
 // ─── CONTACT REASON PARSER ───────────────────────────────────────────────────
-// Source files are UTF-16 TSV (tab-separated) exports from BI tool.
-// Format: Col0=Breakdown I (label), Col1=Breakdown II ("Total"), Col2+= week dates (Sundays)
-// For 'cr': records = { reason, weekStart, count }
+// Source files are UTF-16 TSV exports from BI tool.
+// Supported formats:
+//   Format A (new, daily): Breakdown I = parent, Breakdown II = sub-reason OR channel, daily date cols
+//   Format B (old, weekly): Breakdown I = "Parent - Sub" label, Breakdown II = "Total", weekly date cols
+// For 'cr':    records = { reason, weekStart, count }
 // For 'subcr': records = { subReason, parentReason, weekStart, count }
+const CHANNEL_NAMES = new Set(['chat','email','sms','facebook','instagram','twitter-dm','whatsapp','voice','phone']);
 function parseContactReasonCSV(text, mode) {
-  // Auto-detect delimiter: use tab if any tab is found in the first line
   const firstLine = text.split(/\r?\n/)[0] || '';
   const sep = firstLine.includes('\t') ? '\t' : ',';
   const lines = parseTSV(text, sep);
   if (lines.length < 2) return [];
   const header = lines[0];
-  const results = [];
+
+  // Pre-parse all date column headers
+  const dateColDates = header.slice(2).map(h => parseFlexDate((h||'').trim().replace(/﻿/g,'')));
+
+  // Detect format: if majority of Breakdown II values are NOT "total"/"" → Format A (parent/sub columns)
+  let formatACount = 0, formatBCount = 0;
+  for (let i = 1; i < Math.min(lines.length, 20); i++) {
+    const bII = (lines[i][1]||'').trim().toLowerCase();
+    if (bII === 'total' || bII === '') formatBCount++;
+    else if (bII) formatACount++;
+  }
+  const isFormatA = (formatACount > formatBCount);
+
+  // Check if this is a channel-level file (wrong file for subcr upload)
+  if (isFormatA || formatBCount > 0) {
+    const firstLabels = lines.slice(1, 8).map(r => (r[0]||'').trim().toLowerCase());
+    const isChannelFile = firstLabels.filter(l => CHANNEL_NAMES.has(l)).length >= 3;
+    if (isChannelFile && mode === 'subcr') {
+      throw new Error('Wrong file: this is a channel-level inbound (chat/email/sms rows). For Sub CR, export the Sub Contact Reason deep dive with Breakdown I = parent reason, Breakdown II = sub-reason, and daily date columns.');
+    }
+  }
+
+  // dayAgg: rowKey → { parentReason, subOrReason, days: { dateStr → count } }
+  const dayAgg = {};
 
   for (let i = 1; i < lines.length; i++) {
-    const row = lines[i];
-    const label = (row[0] || '').trim().replace(/﻿/g, '');
-    const bII   = (row[1] || '').trim().toLowerCase();
-    // Skip grand total row (blank label) and non-Total rows
-    if (!label || bII !== 'total') continue;
+    const row   = lines[i];
+    const label = (row[0]||'').trim().replace(/﻿/g,'');
+    const bII   = (row[1]||'').trim();
+    const bIIlc = bII.toLowerCase();
+    if (!label) continue;
+
+    let parentReason = null, subOrReason;
+
+    if (mode === 'cr') {
+      // CR: Breakdown I = reason; skip if Breakdown II is a sub-reason name (non-total non-empty means sub-level row)
+      if (isFormatA) {
+        // Format A: Breakdown I = channel/category, Breakdown II = reason; aggregate all sub-rows
+        if (!bII || bIIlc === 'total') continue;  // skip totals
+        subOrReason = bII.toLowerCase();
+      } else {
+        if (bIIlc !== 'total') continue;
+        subOrReason = label.toLowerCase();
+      }
+    } else {
+      // Sub CR
+      if (isFormatA) {
+        // Format A: Breakdown I = parent reason, Breakdown II = sub-reason
+        if (!bII || bIIlc === 'total') continue; // skip total rows
+        parentReason  = label.toLowerCase();
+        subOrReason   = bII.toLowerCase();
+      } else {
+        // Format B (old): Breakdown I = "Parent - Sub" label, Breakdown II = "Total"
+        if (bIIlc !== 'total') continue;
+        const dashIdx = label.indexOf(' - ');
+        parentReason  = dashIdx >= 0 ? label.slice(0, dashIdx).trim().toLowerCase() : label.toLowerCase();
+        subOrReason   = label.toLowerCase();
+      }
+    }
+
+    const rowKey = mode === 'cr' ? subOrReason : `${parentReason}|||${subOrReason}`;
+    if (!dayAgg[rowKey]) dayAgg[rowKey] = { parentReason, subOrReason, days: {} };
 
     header.slice(2).forEach((hdr, idx) => {
-      const weekStart = parseFlexDate((hdr || '').trim().replace(/﻿/g,''));
-      if (!weekStart) return;
-      const raw = String(row[2 + idx] || '').replace(/,/g, '').replace(/﻿/g,'').trim();
+      const dateObj = dateColDates[idx];
+      if (!dateObj) return;
+      const raw   = String(row[2+idx]||'').replace(/,/g,'').replace(/﻿/g,'').trim();
       const count = parseFloat(raw) || 0;
-      if (mode === 'cr') {
-        results.push({ reason: label.toLowerCase(), weekStart, count });
-      } else {
-        // Sub CR: "parent - sub" → split on first " - "
-        const dashIdx = label.indexOf(' - ');
-        const parentReason = dashIdx >= 0 ? label.slice(0, dashIdx).trim().toLowerCase() : label.toLowerCase();
-        results.push({ subReason: label.toLowerCase(), parentReason, weekStart, count });
-      }
+      if (!count) return;
+      const ds = dateObj.toISOString().split('T')[0];
+      dayAgg[rowKey].days[ds] = (dayAgg[rowKey].days[ds] || 0) + count;
     });
+  }
+
+  // Aggregate daily buckets → Sun-start weeks
+  const results = [];
+  for (const entry of Object.values(dayAgg)) {
+    const weekAgg = {};
+    for (const [ds, count] of Object.entries(entry.days)) {
+      const ws = weekStartSunStr(new Date(ds + 'T12:00:00'));
+      weekAgg[ws] = (weekAgg[ws] || 0) + count;
+    }
+    for (const [weekStart, count] of Object.entries(weekAgg)) {
+      if (mode === 'cr') {
+        results.push({ reason: entry.subOrReason, weekStart, count });
+      } else {
+        results.push({ subReason: entry.subOrReason, parentReason: entry.parentReason, weekStart, count });
+      }
+    }
   }
   return results;
 }
