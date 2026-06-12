@@ -849,7 +849,8 @@ async function apiFetch() {
     cachedData.cr          = data.cr          || [];
     cachedData.subCR       = data.subCR       || [];
     cachedData.config     = data.config     || {};
-    cachedRole = data.role || 'viewer';
+    cachedRole   = data.role || 'viewer';
+    _csatCache   = {}; // bust CSAT render cache — new data arrived
     setSyncStatus('ok');
   } catch(err) {
     console.error('Fetch error:', err);
@@ -1295,6 +1296,13 @@ function renderQuarterlyTable(tbl, summary) {
 // ─── CSAT VIEW ────────────────────────────────────────────────────────────────
 let csatViewMode    = 'weekly';
 let csatPivotMonths = 4; // default: last 4 months shown in pivot columns
+let _csatCache      = {}; // memoised render output keyed by (mode + filters)
+
+function _csatCacheKey() {
+  return csatViewMode + '|' + csatPivotMonths + '|' +
+    _csatSelStr('csat-f-cr') + '|' + _csatSelStr('csat-f-subcr') + '|' +
+    _csatSelStr('csat-f-from') + '|' + _csatSelStr('csat-f-to');
+}
 
 function setCsatView(mode) {
   csatViewMode = mode;
@@ -1429,6 +1437,20 @@ function _csatStats(tickets) {
 
 function renderCSATView() {
   if (!document.getElementById('page-csat')) return;
+
+  // ── Cache restore: if this exact (mode + filters) was already rendered, reuse ──
+  const cacheKey = _csatCacheKey();
+  const cached = _csatCache[cacheKey];
+  if (cached) {
+    const tbl = document.getElementById('csat-table');
+    tbl.style.tableLayout = cached.tableLayout || '';
+    tbl.querySelector('thead').innerHTML = cached.thead;
+    tbl.querySelector('tbody').innerHTML = cached.tbody;
+    document.getElementById('csat-summary').innerHTML = cached.summary;
+    const leg = document.getElementById('csat-mom-legend');
+    if (leg) leg.innerHTML = cached.legend || '';
+    return;
+  }
 
   const allTickets = cachedData.csatTickets || [];
   if (!allTickets.length) {
@@ -1834,6 +1856,16 @@ function renderCSATView() {
     const leg = document.getElementById('csat-mom-legend');
     if (leg) leg.innerHTML = '';
   }
+
+  // ── Cache save: store rendered output so next tab-switch is instant ──────
+  const tblRef = document.getElementById('csat-table');
+  _csatCache[cacheKey] = {
+    thead      : tblRef.querySelector('thead').innerHTML,
+    tbody      : tblRef.querySelector('tbody').innerHTML,
+    tableLayout: tblRef.style.tableLayout,
+    summary    : document.getElementById('csat-summary').innerHTML,
+    legend     : document.getElementById('csat-mom-legend')?.innerHTML || '',
+  };
 }
 
 // ─── DAILY TRACKER RENDER ─────────────────────────────────────────────────────
