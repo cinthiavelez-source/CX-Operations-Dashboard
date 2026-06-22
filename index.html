@@ -57,6 +57,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .sync-dot.syncing{background:#F59E0B;animation:pulse 1s infinite}
 .sync-dot.err{background:#EF4444}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes spin360{to{transform:rotate(360deg)}}
 
 /* ── MAIN ── */
 .main{padding:20px;max-width:100%;overflow-x:hidden}
@@ -221,6 +222,9 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
   </div>
   <div class="nav-right">
     <span class="nav-email" id="nav-email"></span>
+    <button class="nav-btn btn-sm" id="btn-refresh" onclick="manualRefresh()" title="Refresh data from backend" style="display:flex;align-items:center;gap:5px;opacity:.85">
+      <span id="refresh-icon" style="font-size:14px;line-height:1">↻</span> Refresh
+    </button>
     <button class="nav-btn btn-sm" onclick="doLogout()">Sign Out</button>
     <div class="sync-dot" id="sync-dot"></div>
   </div>
@@ -3371,11 +3375,20 @@ async function initApp() {
   // Refresh admin button after role is known
   if (isAdmin()) document.getElementById('btn-admin').style.display='';
   navTo('overview');
-  // Auto-refresh every 3 minutes
-  setInterval(async () => {
-    await apiFetch();
-    navTo(currentPage);
-  }, 180000);
+  // No auto-refresh — data updates once daily; use the Refresh button in the nav bar to reload manually.
+}
+
+async function manualRefresh() {
+  const btn  = document.getElementById('btn-refresh');
+  const icon = document.getElementById('refresh-icon');
+  if (btn) btn.disabled = true;
+  if (icon) icon.style.animation = 'spin360 .8s linear infinite';
+  await apiFetch();
+  _csatCache = {}; // bust CSAT render cache so tables reflect fresh data
+  if (btn) btn.disabled = false;
+  if (icon) icon.style.animation = '';
+  navTo(currentPage);
+  showToast('✅ Data refreshed', '#10B981');
 }
 
 (function boot() { initApp(); })();
