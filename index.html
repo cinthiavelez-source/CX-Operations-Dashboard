@@ -3473,6 +3473,16 @@ function _chSlaColor(pct) {
 
 function _chFmt(v) { return (v != null && v !== 0) ? Number(v).toLocaleString() : '—'; }
 
+// Snap any date string to its containing Sunday (YYYY-MM-DD)
+function _snapSun(dateStr) {
+  const s = _normWS(dateStr);
+  if (!s) return null;
+  const d = new Date(s + 'T12:00:00');
+  if (isNaN(d)) return null;
+  d.setDate(d.getDate() - d.getDay());
+  return d.toISOString().slice(0, 10);
+}
+
 function _parseMonthKey(monthStr) {
   if (!monthStr) return null;
   const s = String(monthStr).trim();
@@ -3601,43 +3611,42 @@ function _buildChSlaTable(periods, slaMap, allCh, fmtPeriod) {
 // ── Daily ─────────────────────────────────────────────────────────────────────
 
 function _renderChannelsDaily() {
-  const { inboundT, forecastsD, forecasts, slaData } = cachedData;
+  const { inboundD, forecastsD, forecasts } = cachedData;
   const limit = channelLimit.daily;
 
-  // Volume by date
+  // Volume by date — inbound only
   const volMap = {};
-  inboundT.forEach(d => {
+  inboundD.forEach(d => {
     const dt = _normWS(d.date);
     if (!dt) return;
     if (!volMap[dt]) volMap[dt] = { chat: 0, email: 0, total: 0 };
-    volMap[dt].chat  += n(d.chatTotal);
-    volMap[dt].email += n(d.emailTotal);
-    volMap[dt].total += n(d.totalTotal);
+    volMap[dt].chat  += n(d.chatOnly);
+    volMap[dt].email += n(d.emailOnly);
+    volMap[dt].total += n(d.totalOnly) || (n(d.chatOnly) + n(d.emailOnly));
   });
 
   // Daily forecast map
   const fcstD = {};
   forecastsD.forEach(f => { fcstD[_normWS(f.date)] = { chat: n(f.chatFCST), email: n(f.emailFCST), total: n(f.totalFCST) }; });
 
-  // Weekly forecast fallback
+  // Weekly forecast fallback (distribute by DOW)
   const fcstW = {};
-  forecasts.forEach(f => { fcstW[_normWS(f.weekStart)] = { chat: n(f.chatFCST), email: n(f.emailFCST), total: n(f.totalFCST) }; });
+  forecasts.forEach(f => { fcstW[_snapSun(_normWS(f.weekStart))] = { chat: n(f.chatFCST), email: n(f.emailFCST), total: n(f.totalFCST) }; });
 
   const DOW_FACTORS = [0.08, 0.18, 0.19, 0.19, 0.19, 0.12, 0.05]; // Sun–Sat
 
-  // SLA by date
+  // SLA by date — keyed on normalized daily date
   const slaMap = _buildSlaMap(d => _normWS(d.date));
   const allCh = _allChannels();
 
-  // All known dates
-  let dates = [...new Set([...Object.keys(volMap), ...Object.keys(slaMap)])].filter(Boolean).sort().reverse();
-  if (limit > 0) dates = dates.slice(0, limit);
+  let dates = [...new Set([...Object.keys(volMap), ...Object.keys(slaMap)])].filter(Boolean).sort();
+  if (limit > 0) dates = dates.slice(-limit);
 
   _buildChVolTable(dates, dt => {
     const vol = volMap[dt] || null;
     let fcst = fcstD[dt] || null;
     if (!fcst) {
-      const ws = (() => { const d = new Date(dt + 'T12:00:00'); d.setDate(d.getDate() - d.getDay()); return d.toISOString().slice(0,10); })();
+      const ws = _snapSun(dt);
       const wf = fcstW[ws];
       if (wf) {
         const dow = new Date(dt + 'T12:00:00').getDay();
@@ -3653,34 +3662,40 @@ function _renderChannelsDaily() {
 // ── Weekly ────────────────────────────────────────────────────────────────────
 
 function _renderChannelsWeekly() {
-  const { inboundT, forecasts, slaData } = cachedData;
+  const { inboundD, forecasts } = cachedData;
   const limit = channelLimit.weekly;
 
-  // Volume: aggregate inboundT by weekStart
+  // Volume: aggregate inboundD by Sunday weekStart — inbound only
   const volMap = {};
-  inboundT.forEach(d => {
-    const ws = _normWS(d.weekStart) || _normWS(d.date);
+  inboundD.forEach(d => {
+    const ws = _snapSun(d.date);
     if (!ws) return;
     if (!volMap[ws]) volMap[ws] = { chat: 0, email: 0, total: 0 };
-    volMap[ws].chat  += n(d.chatTotal);
-    volMap[ws].email += n(d.emailTotal);
-    volMap[ws].total += n(d.totalTotal);
+    volMap[ws].chat  += n(d.chatOnly);
+    volMap[ws].email += n(d.emailOnly);
+    volMap[ws].total += n(d.totalOnly) || (n(d.chatOnly) + n(d.emailOnly));
   });
 
-  // Weekly forecast
+  // Weekly forecast — keyed by Sunday weekStart
   const fcstMap = {};
-  forecasts.forEach(f => { fcstMap[_normWS(f.weekStart)] = { chat: n(f.chatFCST), email: n(f.emailFCST), total: n(f.totalFCST) }; });
+  forecasts.forEach(f => {
+    const ws = _snapSun(_normWS(f.weekStart));
+    if (ws) fcstMap[ws] = { chat: n(f.chatFCST), email: n(f.emailFCST), total: n(f.totalFCST) };
+  });
 
-  // SLA by weekStart
-  const slaMap = _buildSlaMap(d => _normWS(d.weekStart) || _normWS(d.date));
+  // SLA: also snap daily date to Sunday so keys always match
+  const slaMap = _buildSlaMap(d => _snapSun(d.date));
   const allCh = _allChannels();
 
-  // Build week label lookup
+  // Week label: W-number from forecast, fallback to formatted date
   const weekLabel = {};
-  forecasts.forEach(f => { if (f.weekStart && f.week) weekLabel[_normWS(f.weekStart)] = f.week; });
+  forecasts.forEach(f => {
+    const ws = _snapSun(_normWS(f.weekStart));
+    if (ws && f.week) weekLabel[ws] = f.week;
+  });
 
-  let periods = [...new Set([...Object.keys(volMap), ...Object.keys(fcstMap), ...Object.keys(slaMap)])].filter(Boolean).sort().reverse();
-  if (limit > 0) periods = periods.slice(0, limit);
+  let periods = [...new Set([...Object.keys(volMap), ...Object.keys(fcstMap), ...Object.keys(slaMap)])].filter(Boolean).sort();
+  if (limit > 0) periods = periods.slice(-limit);
 
   _buildChVolTable(periods, ws => ({ vol: volMap[ws] || null, fcst: fcstMap[ws] || null }), ws => weekLabel[ws] || fmtDate(ws));
   _buildChSlaTable(periods, slaMap, allCh, ws => weekLabel[ws] || fmtDate(ws));
@@ -3689,19 +3704,19 @@ function _renderChannelsWeekly() {
 // ── Monthly ───────────────────────────────────────────────────────────────────
 
 function _renderChannelsMonthly() {
-  const { inboundT, forecastsM, slaData } = cachedData;
+  const { inboundD, forecastsM } = cachedData;
   const limit = channelLimit.monthly;
 
-  // Volume: aggregate inboundT by YYYY-MM
+  // Volume: aggregate inboundD by YYYY-MM — inbound only
   const volMap = {};
-  inboundT.forEach(d => {
-    const dt = _normWS(d.date) || _normWS(d.weekStart);
+  inboundD.forEach(d => {
+    const dt = _normWS(d.date);
     if (!dt) return;
     const mo = dt.slice(0, 7);
     if (!volMap[mo]) volMap[mo] = { chat: 0, email: 0, total: 0 };
-    volMap[mo].chat  += n(d.chatTotal);
-    volMap[mo].email += n(d.emailTotal);
-    volMap[mo].total += n(d.totalTotal);
+    volMap[mo].chat  += n(d.chatOnly);
+    volMap[mo].email += n(d.emailOnly);
+    volMap[mo].total += n(d.totalOnly) || (n(d.chatOnly) + n(d.emailOnly));
   });
 
   // Monthly forecast
@@ -3711,10 +3726,10 @@ function _renderChannelsMonthly() {
     if (mo) fcstMap[mo] = { chat: n(f.chatFCST), email: n(f.emailFCST), total: n(f.totalFCST) };
   });
 
-  // SLA by month
+  // SLA by month — derive from daily date
   const slaMap = {};
   cachedData.slaData.forEach(d => {
-    const dt = _normWS(d.date) || _normWS(d.weekStart);
+    const dt = _normWS(d.date);
     if (!dt) return;
     const mo = dt.slice(0, 7);
     const ch = String(d.channel || '').toLowerCase().trim();
@@ -3725,8 +3740,8 @@ function _renderChannelsMonthly() {
   });
   const allCh = _allChannels();
 
-  let periods = [...new Set([...Object.keys(volMap), ...Object.keys(fcstMap), ...Object.keys(slaMap)])].filter(Boolean).sort().reverse();
-  if (limit > 0) periods = periods.slice(0, limit);
+  let periods = [...new Set([...Object.keys(volMap), ...Object.keys(fcstMap), ...Object.keys(slaMap)])].filter(Boolean).sort();
+  if (limit > 0) periods = periods.slice(-limit);
 
   const moLabel = mo => { const [y, m] = mo.split('-'); return new Date(+y, +m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); };
 
