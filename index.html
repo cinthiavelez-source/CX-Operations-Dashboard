@@ -218,6 +218,7 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <button class="nav-btn" data-page="cr"    onclick="navTo('cr')">📋 Contact Reason</button>
     <button class="nav-btn" data-page="subcr" onclick="navTo('subcr')">🔍 Sub CR</button>
     <button class="nav-btn" data-page="csat"  onclick="navTo('csat')">⭐ CSAT</button>
+    <button class="nav-btn" data-page="channels" onclick="navTo('channels')">📈 Channels</button>
     <button class="nav-btn" id="btn-admin" data-page="admin" onclick="navTo('admin')" style="display:none">⚙️ Admin</button>
   </div>
   <div class="nav-right">
@@ -774,6 +775,31 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
   </div>
 </div>
 
+<!-- ── CHANNEL PERFORMANCE PAGE ── -->
+<div id="page-channels" class="page">
+  <div class="page-header" style="flex-wrap:wrap;gap:10px">
+    <h2>📈 Channel Performance</h2>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="toggle-group">
+        <button class="toggle-btn" id="ch-tb-daily"   onclick="setChannelView('daily')">Daily</button>
+        <button class="toggle-btn active" id="ch-tb-weekly"  onclick="setChannelView('weekly')">Weekly</button>
+        <button class="toggle-btn" id="ch-tb-monthly" onclick="setChannelView('monthly')">Monthly</button>
+      </div>
+      <div id="ch-limit-wrap"></div>
+    </div>
+  </div>
+
+  <h3 style="margin:0 0 8px;font-size:14px;font-weight:600;color:var(--text)">Volume: Actual vs Forecast by Channel</h3>
+  <div class="table-wrapper" style="margin-bottom:28px">
+    <table id="ch-vol-table" style="table-layout:auto"><thead></thead><tbody></tbody></table>
+  </div>
+
+  <h3 style="margin:0 0 8px;font-size:14px;font-weight:600;color:var(--text)">SLA % by Channel</h3>
+  <div class="table-wrapper">
+    <table id="ch-sla-table" style="table-layout:auto"><thead></thead><tbody></tbody></table>
+  </div>
+</div>
+
 </div><!-- /main -->
 
 <!-- TOAST -->
@@ -878,7 +904,7 @@ async function apiPost(body) {
 }
 
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
-const PAGES = ['overview','tracker','upload','kpi','cr','subcr','csat','admin'];
+const PAGES = ['overview','tracker','upload','kpi','cr','subcr','csat','channels','admin'];
 
 async function navTo(page) {
   currentPage = page;
@@ -896,6 +922,7 @@ async function navTo(page) {
   if (page === 'cr')        renderCR();
   if (page === 'subcr')     renderSubCR();
   if (page === 'csat')      renderCSATView();
+  if (page === 'channels')  renderChannels();
   if (page === 'admin')     renderAdmin();
 }
 
@@ -3392,6 +3419,320 @@ async function manualRefresh() {
 }
 
 (function boot() { initApp(); })();
+
+// ─── CHANNEL PERFORMANCE ─────────────────────────────────────────────────────
+
+let channelView = 'weekly';
+const channelLimit = { daily: 30, weekly: 12, monthly: 12 };
+
+function setChannelView(v) {
+  channelView = v;
+  ['daily','weekly','monthly'].forEach(m => {
+    const b = document.getElementById('ch-tb-' + m);
+    if (b) b.classList.toggle('active', m === v);
+  });
+  const wrap = document.getElementById('ch-limit-wrap');
+  if (wrap) wrap.innerHTML = _chLimitHTML();
+  renderChannels();
+}
+
+function _chLimitHTML() {
+  const opts = channelView === 'daily'
+    ? [[14,'Last 14 days'],[30,'Last 30 days'],[60,'Last 60 days'],[0,'All']]
+    : channelView === 'weekly'
+    ? [[8,'Last 8 weeks'],[12,'Last 12 weeks'],[26,'Last 26 weeks'],[0,'All']]
+    : [[6,'Last 6 months'],[12,'Last 12 months'],[0,'All']];
+  const cur = channelLimit[channelView];
+  return '<select onchange="channelLimit[channelView]=+this.value;renderChannels()" style="padding:5px 8px;border:2px solid var(--border);border-radius:6px;font-size:12px;outline:none;background:#fff">' +
+    opts.map(([v,l]) => `<option value="${v}"${v===cur?' selected':''}>${l}</option>`).join('') + '</select>';
+}
+
+function renderChannels() {
+  // Ensure limit dropdown is rendered
+  const wrap = document.getElementById('ch-limit-wrap');
+  if (wrap && !wrap.innerHTML) wrap.innerHTML = _chLimitHTML();
+
+  if (channelView === 'daily')        _renderChannelsDaily();
+  else if (channelView === 'weekly')  _renderChannelsWeekly();
+  else                                _renderChannelsMonthly();
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function _chPctCell(actual, forecast) {
+  if (!forecast || forecast === 0 || actual == null) return '<td style="color:var(--mid);text-align:center">—</td>';
+  const p = ((actual - forecast) / forecast) * 100;
+  const c = p >= -5 ? '#10B981' : p >= -15 ? '#F59E0B' : '#EF4444';
+  return `<td style="color:${c};font-weight:600;text-align:center">${p >= 0 ? '+' : ''}${p.toFixed(1)}%</td>`;
+}
+
+function _chSlaColor(pct) {
+  if (pct === null || pct === undefined) return 'var(--mid)';
+  return pct >= 90 ? '#10B981' : pct >= 80 ? '#F59E0B' : '#EF4444';
+}
+
+function _chFmt(v) { return (v != null && v !== 0) ? Number(v).toLocaleString() : '—'; }
+
+function _parseMonthKey(monthStr) {
+  if (!monthStr) return null;
+  const s = String(monthStr).trim();
+  if (/^\d{4}-\d{2}$/.test(s)) return s;
+  const d = new Date(s + 'T12:00:00');
+  if (!isNaN(d)) return d.toISOString().slice(0, 7);
+  const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  const idx = months.indexOf(s.toLowerCase().slice(0, 3));
+  if (idx >= 0) {
+    const yr = new Date().getFullYear();
+    return `${yr}-${String(idx + 1).padStart(2, '0')}`;
+  }
+  return null;
+}
+
+// ── SLA aggregation helper ────────────────────────────────────────────────────
+
+function _buildSlaMap(keyFn) {
+  const map = {};
+  cachedData.slaData.forEach(d => {
+    const k = keyFn(d);
+    if (!k) return;
+    const ch = String(d.channel || '').toLowerCase().trim();
+    if (!map[k]) map[k] = {};
+    if (!map[k][ch]) map[k][ch] = { a: 0, b: 0 };
+    map[k][ch].a += n(d.achieved);
+    map[k][ch].b += n(d.breached);
+  });
+  return map;
+}
+
+function _allChannels() {
+  return [...new Set(cachedData.slaData.map(d => String(d.channel || '').toLowerCase().trim()).filter(Boolean))].sort();
+}
+
+// ── Table builders ────────────────────────────────────────────────────────────
+
+function _buildChVolTable(periods, getRow, fmtPeriod) {
+  const tbl = document.getElementById('ch-vol-table');
+  if (!tbl) return;
+  tbl.querySelector('thead').innerHTML = `
+    <tr>
+      <th rowspan="2" style="vertical-align:middle">Period</th>
+      <th colspan="3" style="text-align:center;border-left:2px solid var(--border)">Live (Chat / SMS)</th>
+      <th colspan="3" style="text-align:center;border-left:2px solid var(--border)">Email</th>
+      <th colspan="3" style="text-align:center;border-left:2px solid var(--border)">Total</th>
+    </tr>
+    <tr>
+      <th style="border-left:2px solid var(--border);text-align:right">Actual</th>
+      <th style="text-align:right;color:var(--mid)">Forecast</th>
+      <th style="text-align:center">% vs Fcst</th>
+      <th style="border-left:2px solid var(--border);text-align:right">Actual</th>
+      <th style="text-align:right;color:var(--mid)">Forecast</th>
+      <th style="text-align:center">% vs Fcst</th>
+      <th style="border-left:2px solid var(--border);text-align:right">Actual</th>
+      <th style="text-align:right;color:var(--mid)">Forecast</th>
+      <th style="text-align:center">% vs Fcst</th>
+    </tr>`;
+
+  const rows = periods.map(p => {
+    const { vol, fcst } = getRow(p);
+    const cA = vol ? n(vol.chat)  : 0, cF = fcst ? n(fcst.chat)  : 0;
+    const eA = vol ? n(vol.email) : 0, eF = fcst ? n(fcst.email) : 0;
+    const tA = vol ? n(vol.total) || (cA + eA) : (cA + eA);
+    const tF = fcst ? n(fcst.total) || (cF + eF) : (cF + eF);
+    return `<tr>
+      <td style="font-weight:500;white-space:nowrap">${fmtPeriod(p)}</td>
+      <td style="border-left:2px solid var(--border);text-align:right">${_chFmt(cA)}</td>
+      <td style="text-align:right;color:var(--mid)">${_chFmt(cF)}</td>
+      ${_chPctCell(cA, cF)}
+      <td style="border-left:2px solid var(--border);text-align:right">${_chFmt(eA)}</td>
+      <td style="text-align:right;color:var(--mid)">${_chFmt(eF)}</td>
+      ${_chPctCell(eA, eF)}
+      <td style="border-left:2px solid var(--border);text-align:right;font-weight:600">${_chFmt(tA)}</td>
+      <td style="text-align:right;color:var(--mid)">${_chFmt(tF)}</td>
+      ${_chPctCell(tA, tF)}
+    </tr>`;
+  });
+
+  tbl.querySelector('tbody').innerHTML = rows.join('') ||
+    '<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--mid)">No data — upload inbound data first</td></tr>';
+}
+
+function _buildChSlaTable(periods, slaMap, allCh, fmtPeriod) {
+  const tbl = document.getElementById('ch-sla-table');
+  if (!tbl) return;
+
+  if (!allCh.length) {
+    tbl.querySelector('thead').innerHTML = '';
+    tbl.querySelector('tbody').innerHTML =
+      '<tr><td style="text-align:center;padding:24px;color:var(--mid)">No SLA data — upload SLA achieved/breached data first</td></tr>';
+    return;
+  }
+
+  const capCh = ch => ch.charAt(0).toUpperCase() + ch.slice(1);
+  tbl.querySelector('thead').innerHTML = `<tr>
+    <th>Period</th>
+    ${allCh.map(ch => `<th style="text-align:center">${capCh(ch)}</th>`).join('')}
+    <th style="text-align:center;border-left:2px solid var(--border)">Overall</th>
+  </tr>`;
+
+  const rows = periods.map(p => {
+    const chMap = slaMap[p] || {};
+    let totalA = 0, totalB = 0;
+    const cells = allCh.map(ch => {
+      const d = chMap[ch];
+      if (!d || (d.a + d.b) === 0) return '<td style="text-align:center;color:var(--mid)">—</td>';
+      const pct = (d.a / (d.a + d.b)) * 100;
+      totalA += d.a; totalB += d.b;
+      return `<td style="text-align:center;color:${_chSlaColor(pct)};font-weight:600">${pct.toFixed(1)}%</td>`;
+    });
+    const overall = (totalA + totalB) > 0 ? (totalA / (totalA + totalB)) * 100 : null;
+    const overallCell = overall !== null
+      ? `<td style="text-align:center;font-weight:700;color:${_chSlaColor(overall)};border-left:2px solid var(--border)">${overall.toFixed(1)}%</td>`
+      : `<td style="text-align:center;color:var(--mid);border-left:2px solid var(--border)">—</td>`;
+    return `<tr>
+      <td style="font-weight:500;white-space:nowrap">${fmtPeriod(p)}</td>
+      ${cells.join('')}${overallCell}
+    </tr>`;
+  });
+
+  tbl.querySelector('tbody').innerHTML = rows.join('') ||
+    `<tr><td colspan="${allCh.length + 2}" style="text-align:center;padding:24px;color:var(--mid)">No data</td></tr>`;
+}
+
+// ── Daily ─────────────────────────────────────────────────────────────────────
+
+function _renderChannelsDaily() {
+  const { inboundT, forecastsD, forecasts, slaData } = cachedData;
+  const limit = channelLimit.daily;
+
+  // Volume by date
+  const volMap = {};
+  inboundT.forEach(d => {
+    const dt = _normWS(d.date);
+    if (!dt) return;
+    if (!volMap[dt]) volMap[dt] = { chat: 0, email: 0, total: 0 };
+    volMap[dt].chat  += n(d.chatTotal);
+    volMap[dt].email += n(d.emailTotal);
+    volMap[dt].total += n(d.totalTotal);
+  });
+
+  // Daily forecast map
+  const fcstD = {};
+  forecastsD.forEach(f => { fcstD[_normWS(f.date)] = { chat: n(f.chatFCST), email: n(f.emailFCST), total: n(f.totalFCST) }; });
+
+  // Weekly forecast fallback
+  const fcstW = {};
+  forecasts.forEach(f => { fcstW[_normWS(f.weekStart)] = { chat: n(f.chatFCST), email: n(f.emailFCST), total: n(f.totalFCST) }; });
+
+  const DOW_FACTORS = [0.08, 0.18, 0.19, 0.19, 0.19, 0.12, 0.05]; // Sun–Sat
+
+  // SLA by date
+  const slaMap = _buildSlaMap(d => _normWS(d.date));
+  const allCh = _allChannels();
+
+  // All known dates
+  let dates = [...new Set([...Object.keys(volMap), ...Object.keys(slaMap)])].filter(Boolean).sort().reverse();
+  if (limit > 0) dates = dates.slice(0, limit);
+
+  _buildChVolTable(dates, dt => {
+    const vol = volMap[dt] || null;
+    let fcst = fcstD[dt] || null;
+    if (!fcst) {
+      const ws = (() => { const d = new Date(dt + 'T12:00:00'); d.setDate(d.getDate() - d.getDay()); return d.toISOString().slice(0,10); })();
+      const wf = fcstW[ws];
+      if (wf) {
+        const dow = new Date(dt + 'T12:00:00').getDay();
+        fcst = { chat: Math.round(wf.chat * DOW_FACTORS[dow]), email: Math.round(wf.email * DOW_FACTORS[dow]), total: Math.round(wf.total * DOW_FACTORS[dow]) };
+      }
+    }
+    return { vol, fcst };
+  }, dt => fmtDate(dt));
+
+  _buildChSlaTable(dates, slaMap, allCh, dt => fmtDate(dt));
+}
+
+// ── Weekly ────────────────────────────────────────────────────────────────────
+
+function _renderChannelsWeekly() {
+  const { inboundT, forecasts, slaData } = cachedData;
+  const limit = channelLimit.weekly;
+
+  // Volume: aggregate inboundT by weekStart
+  const volMap = {};
+  inboundT.forEach(d => {
+    const ws = _normWS(d.weekStart) || _normWS(d.date);
+    if (!ws) return;
+    if (!volMap[ws]) volMap[ws] = { chat: 0, email: 0, total: 0 };
+    volMap[ws].chat  += n(d.chatTotal);
+    volMap[ws].email += n(d.emailTotal);
+    volMap[ws].total += n(d.totalTotal);
+  });
+
+  // Weekly forecast
+  const fcstMap = {};
+  forecasts.forEach(f => { fcstMap[_normWS(f.weekStart)] = { chat: n(f.chatFCST), email: n(f.emailFCST), total: n(f.totalFCST) }; });
+
+  // SLA by weekStart
+  const slaMap = _buildSlaMap(d => _normWS(d.weekStart) || _normWS(d.date));
+  const allCh = _allChannels();
+
+  // Build week label lookup
+  const weekLabel = {};
+  forecasts.forEach(f => { if (f.weekStart && f.week) weekLabel[_normWS(f.weekStart)] = f.week; });
+
+  let periods = [...new Set([...Object.keys(volMap), ...Object.keys(fcstMap), ...Object.keys(slaMap)])].filter(Boolean).sort().reverse();
+  if (limit > 0) periods = periods.slice(0, limit);
+
+  _buildChVolTable(periods, ws => ({ vol: volMap[ws] || null, fcst: fcstMap[ws] || null }), ws => weekLabel[ws] || fmtDate(ws));
+  _buildChSlaTable(periods, slaMap, allCh, ws => weekLabel[ws] || fmtDate(ws));
+}
+
+// ── Monthly ───────────────────────────────────────────────────────────────────
+
+function _renderChannelsMonthly() {
+  const { inboundT, forecastsM, slaData } = cachedData;
+  const limit = channelLimit.monthly;
+
+  // Volume: aggregate inboundT by YYYY-MM
+  const volMap = {};
+  inboundT.forEach(d => {
+    const dt = _normWS(d.date) || _normWS(d.weekStart);
+    if (!dt) return;
+    const mo = dt.slice(0, 7);
+    if (!volMap[mo]) volMap[mo] = { chat: 0, email: 0, total: 0 };
+    volMap[mo].chat  += n(d.chatTotal);
+    volMap[mo].email += n(d.emailTotal);
+    volMap[mo].total += n(d.totalTotal);
+  });
+
+  // Monthly forecast
+  const fcstMap = {};
+  forecastsM.forEach(f => {
+    const mo = _parseMonthKey(f.month);
+    if (mo) fcstMap[mo] = { chat: n(f.chatFCST), email: n(f.emailFCST), total: n(f.totalFCST) };
+  });
+
+  // SLA by month
+  const slaMap = {};
+  cachedData.slaData.forEach(d => {
+    const dt = _normWS(d.date) || _normWS(d.weekStart);
+    if (!dt) return;
+    const mo = dt.slice(0, 7);
+    const ch = String(d.channel || '').toLowerCase().trim();
+    if (!slaMap[mo]) slaMap[mo] = {};
+    if (!slaMap[mo][ch]) slaMap[mo][ch] = { a: 0, b: 0 };
+    slaMap[mo][ch].a += n(d.achieved);
+    slaMap[mo][ch].b += n(d.breached);
+  });
+  const allCh = _allChannels();
+
+  let periods = [...new Set([...Object.keys(volMap), ...Object.keys(fcstMap), ...Object.keys(slaMap)])].filter(Boolean).sort().reverse();
+  if (limit > 0) periods = periods.slice(0, limit);
+
+  const moLabel = mo => { const [y, m] = mo.split('-'); return new Date(+y, +m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }); };
+
+  _buildChVolTable(periods, mo => ({ vol: volMap[mo] || null, fcst: fcstMap[mo] || null }), moLabel);
+  _buildChSlaTable(periods, slaMap, allCh, moLabel);
+}
 </script>
 </body>
 </html>
