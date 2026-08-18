@@ -1952,7 +1952,7 @@ function renderTracker() {
     const wTotalFCST   = grp.days.reduce((s,d) => s + (d.totalFCST  || 0), 0);
     const wTotalSolved = grp.days.reduce((s,d) => s + (d.totalSolved || 0), 0);
     const wTotalInb    = grp.days.reduce((s,d) => s + (d.totalInb    || 0), 0);
-    const wAcc    = wTotalFCST ? (wTotalSolved / wTotalFCST * 100) : null;
+    const wAcc    = wTotalInb  ? (wTotalSolved / wTotalInb  * 100) : null;
     const wInbAcc = wTotalFCST && wTotalInb ? (wTotalInb / wTotalFCST * 100) : null;
     // Weekly SLA: sum achieved/breached across all days in the group
     let wAch = 0, wBre = 0;
@@ -1966,7 +1966,7 @@ function renderTracker() {
         <span class="wk-stat">Week of <strong>${fmtDate(grp.weekStart)}</strong></span>
         ${wTotalFCST  ? `<span class="wk-stat">FCST: <strong>${fmtN(wTotalFCST)}</strong></span>` : ''}
         ${wTotalSolved ? `<span class="wk-stat">Solved: <strong>${fmtN(wTotalSolved)}</strong></span>` : ''}
-        ${wAcc    != null ? `<span class="wk-stat">Solve/FCST: <strong>${fmtPct(wAcc)}</strong></span>` : ''}
+        ${wAcc    != null ? `<span class="wk-stat">Solve/Inb: <strong>${fmtPct(wAcc)}</strong></span>` : ''}
         ${wInbAcc != null ? `<span class="wk-stat">Inb/FCST: <strong>${fmtPct(wInbAcc)}</strong></span>` : ''}
         ${wSLA    != null ? `<span class="wk-stat">SLA: <strong class="${colorSLA(wSLA)}">${fmtPct(wSLA)}</strong></span>` : ''}
         ${wCSAT   != null ? `<span class="wk-stat">CSAT: <strong class="${colorCSAT(wCSAT)}">${fmtPct(wCSAT)}</strong></span>` : ''}
@@ -1977,14 +1977,14 @@ function renderTracker() {
           <th>Day</th><th>Date</th>
           <th>Total FCST</th>
           ${hasDailyInb ? '<th>Total Inb</th><th>Inb Acc%</th>' : ''}
-          <th>Total Solved</th><th>Solve/FCST%</th>
+          <th>Total Solved</th><th>Solve/Inb%</th>
           <th>SLA%</th><th>CSAT%</th>
         </tr></thead>
         <tbody>`;
 
     grp.days.forEach(day => {
       const isFuture  = new Date(day.date) > new Date();
-      const solveAcc  = day.totalFCST && day.totalSolved ? day.totalSolved / day.totalFCST * 100 : null;
+      const solveAcc  = day.totalInb  && day.totalSolved ? day.totalSolved / day.totalInb  * 100 : null;
       const inbAcc    = day.totalFCST && day.totalInb    ? day.totalInb    / day.totalFCST * 100 : null;
       const slaEntry  = dailySLAMap[day.date];
       const slaPct    = slaEntry && (slaEntry.achieved + slaEntry.breached) > 0
