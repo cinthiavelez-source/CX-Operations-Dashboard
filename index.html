@@ -3611,18 +3611,18 @@ function _buildChSlaTable(periods, slaMap, allCh, fmtPeriod) {
 // ── Daily ─────────────────────────────────────────────────────────────────────
 
 function _renderChannelsDaily() {
-  const { inboundT, forecastsD, forecasts } = cachedData;
+  const { inboundD, forecastsD, forecasts } = cachedData;
   const limit = channelLimit.daily;
 
-  // Volume by date
+  // Volume by date — inbound only (Daily_Inbound sheet)
   const volMap = {};
-  inboundT.forEach(d => {
+  inboundD.forEach(d => {
     const dt = _normWS(d.date);
     if (!dt) return;
     if (!volMap[dt]) volMap[dt] = { chat: 0, email: 0, total: 0 };
-    volMap[dt].chat  += n(d.chatTotal);
-    volMap[dt].email += n(d.emailTotal);
-    volMap[dt].total += n(d.totalTotal) || (n(d.chatTotal) + n(d.emailTotal));
+    volMap[dt].chat  += n(d.chatOnly);
+    volMap[dt].email += n(d.emailOnly);
+    volMap[dt].total += n(d.totalOnly) || (n(d.chatOnly) + n(d.emailOnly));
   });
 
   // Daily forecast map
@@ -3662,18 +3662,18 @@ function _renderChannelsDaily() {
 // ── Weekly ────────────────────────────────────────────────────────────────────
 
 function _renderChannelsWeekly() {
-  const { inboundT, forecasts } = cachedData;
+  const { inboundD, forecasts } = cachedData;
   const limit = channelLimit.weekly;
 
-  // Volume: aggregate inboundT by Sunday weekStart
+  // Volume: aggregate inboundD by Sunday weekStart — inbound only
   const volMap = {};
-  inboundT.forEach(d => {
+  inboundD.forEach(d => {
     const ws = _snapSun(d.date);
     if (!ws) return;
     if (!volMap[ws]) volMap[ws] = { chat: 0, email: 0, total: 0 };
-    volMap[ws].chat  += n(d.chatTotal);
-    volMap[ws].email += n(d.emailTotal);
-    volMap[ws].total += n(d.totalTotal) || (n(d.chatTotal) + n(d.emailTotal));
+    volMap[ws].chat  += n(d.chatOnly);
+    volMap[ws].email += n(d.emailOnly);
+    volMap[ws].total += n(d.totalOnly) || (n(d.chatOnly) + n(d.emailOnly));
   });
 
   // Weekly forecast — keyed by Sunday weekStart
@@ -3704,19 +3704,19 @@ function _renderChannelsWeekly() {
 // ── Monthly ───────────────────────────────────────────────────────────────────
 
 function _renderChannelsMonthly() {
-  const { inboundT, forecastsM } = cachedData;
+  const { inboundD, forecastsM } = cachedData;
   const limit = channelLimit.monthly;
 
-  // Volume: aggregate inboundT by YYYY-MM
+  // Volume: aggregate inboundD by YYYY-MM — inbound only
   const volMap = {};
-  inboundT.forEach(d => {
+  inboundD.forEach(d => {
     const dt = _normWS(d.date);
     if (!dt) return;
     const mo = dt.slice(0, 7);
     if (!volMap[mo]) volMap[mo] = { chat: 0, email: 0, total: 0 };
-    volMap[mo].chat  += n(d.chatTotal);
-    volMap[mo].email += n(d.emailTotal);
-    volMap[mo].total += n(d.totalTotal) || (n(d.chatTotal) + n(d.emailTotal));
+    volMap[mo].chat  += n(d.chatOnly);
+    volMap[mo].email += n(d.emailOnly);
+    volMap[mo].total += n(d.totalOnly) || (n(d.chatOnly) + n(d.emailOnly));
   });
 
   // Monthly forecast
