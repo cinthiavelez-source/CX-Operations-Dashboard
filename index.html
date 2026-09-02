@@ -1102,6 +1102,28 @@ function getMonthlyData() {
     if(w.tphBPO){r.tphBPOS+=w.tphBPO;r.tphBPOC++}
     if(w.hcNeeded){r.hcNS+=w.hcNeeded;r.hcNC++}if(w.hcReal){r.hcRS+=w.hcReal;r.hcRC++}
   });
+  // Override FCST with Forecast_Monthly sheet values when available (authoritative source)
+  const mFcstMap = {};
+  (cachedData.forecastsM || []).forEach(f => {
+    const mo = _parseMonthKey(f.month);
+    if (!mo) return;
+    const [, mIdx] = mo.split('-');
+    const mName = MONTHS_FULL[+mIdx - 1];
+    if (mName) mFcstMap[mName] = { chat: n(f.chatFCST), email: n(f.emailFCST), total: n(f.totalFCST) };
+  });
+  Object.keys(mFcstMap).forEach(mName => {
+    if (!mmap[mName]) mmap[mName] = {
+      month:mName, chatFCST:0,emailFCST:0,totalFCST:0,
+      chatOnly:0,emailOnly:0,totalOnly:0,chatTotal:0,emailTotal:0,totalTotal:0,
+      chatSolved:0,emailSolved:0,totalSolved:0,
+      slaS:0,slaC:0,csatS:0,csatC:0,csatRS:0,csatRC:0,
+      frtS:0,frtC:0,tphCUS:0,tphCUC:0,tphBPOS:0,tphBPOC:0,hcNS:0,hcNC:0,hcRS:0,hcRC:0
+    };
+    mmap[mName].chatFCST  = mFcstMap[mName].chat;
+    mmap[mName].emailFCST = mFcstMap[mName].email;
+    mmap[mName].totalFCST = mFcstMap[mName].total;
+  });
+
   return MONTHS_FULL.filter(m=>mmap[m]).map(m => {
     const r = mmap[m];
     return { ...r,
