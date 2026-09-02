@@ -1124,6 +1124,39 @@ function getMonthlyData() {
     mmap[mName].totalFCST = mFcstMap[mName].total;
   });
 
+  // Override inbound volume with direct calendar-month aggregation from Daily_Inbound
+  // This avoids week-boundary distortion (e.g. Dec 28–31 counted in Jan via week labels)
+  const mInbMap = {};
+  (cachedData.inboundD || []).forEach(d => {
+    const dt = _normWS(d.date);
+    if (!dt) return;
+    const mo = dt.slice(0, 7); // YYYY-MM
+    const [, mIdx] = mo.split('-');
+    const mName = MONTHS_FULL[+mIdx - 1];
+    if (!mName) return;
+    if (!mInbMap[mName]) mInbMap[mName] = { chat: 0, email: 0, total: 0, chatT: 0, emailT: 0, totalT: 0 };
+    mInbMap[mName].chat   += n(d.chatOnly);
+    mInbMap[mName].email  += n(d.emailOnly);
+    mInbMap[mName].total  += n(d.totalOnly) || (n(d.chatOnly) + n(d.emailOnly));
+    mInbMap[mName].chatT  += n(d.chatTotal);
+    mInbMap[mName].emailT += n(d.emailTotal);
+    mInbMap[mName].totalT += n(d.totalTotal) || (n(d.chatTotal) + n(d.emailTotal));
+  });
+  Object.keys(mInbMap).forEach(mName => {
+    if (!mmap[mName]) return; // only override months already in mmap
+    const v = mInbMap[mName];
+    if (v.total > 0) {
+      mmap[mName].chatOnly  = v.chat;
+      mmap[mName].emailOnly = v.email;
+      mmap[mName].totalOnly = v.total;
+    }
+    if (v.totalT > 0) {
+      mmap[mName].chatTotal  = v.chatT;
+      mmap[mName].emailTotal = v.emailT;
+      mmap[mName].totalTotal = v.totalT;
+    }
+  });
+
   return MONTHS_FULL.filter(m=>mmap[m]).map(m => {
     const r = mmap[m];
     return { ...r,
