@@ -813,6 +813,11 @@ const DEFAULT_SCRIPT_URL  = 'https://script.google.com/macros/s/AKfycbzWdxKxSw0T
 const DEFAULT_ADMIN_EMAIL = 'cinthiavelez@cookunity.com';
 const USER_KEY   = 'cxdash_user';
 const URL_KEY    = 'cxdash_url';
+// Shared secret — must match API_TOKEN in Code.gs. Change both together when rotating.
+const API_TOKEN  = 'cxdash-cu-2026';
+// localStorage data cache — avoids a backend round-trip on every page load
+const CACHE_KEY  = 'cxdash_data_v1';
+const CACHE_TTL  = 5 * 60 * 1000; // 5 minutes in ms
 // Day-of-week distribution factors derived from 2025 historical data (Sun=0…Sat=6)
 const DOW = [0.099, 0.150, 0.168, 0.205, 0.160, 0.136, 0.082];
 // Default channel split (Live = 33.7%, Email = 66.3%)
@@ -845,12 +850,32 @@ function doLogin() {
 }
 function doLogout() {
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(CACHE_KEY); // clear data cache on sign-out
   location.reload();
 }
 function isAdmin()  { return cachedRole === 'admin' || (getUser()?.email?.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase()); }
 
 // ─── API ─────────────────────────────────────────────────────────────────────
-async function apiFetch() {
+
+// apiFetch(force): load data from backend.
+//   force=false (default): use localStorage cache if < CACHE_TTL old (instant load).
+//   force=true : skip cache, hit backend, then refresh cache (Refresh button / post-upload).
+async function apiFetch(force = false) {
+  // ── 1. Try cache first (unless forced) ──────────────────────────────────────
+  if (!force) {
+    try {
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+      if (cached && cached.ts && (Date.now() - cached.ts) < CACHE_TTL) {
+        Object.assign(cachedData, cached.data);
+        cachedRole = cached.role || 'viewer';
+        _csatCache = {};
+        setSyncStatus('ok');
+        return; // served from cache — no network call needed
+      }
+    } catch(e) { /* corrupt cache — fall through to network */ }
+  }
+
+  // ── 2. Fetch from backend ────────────────────────────────────────────────────
   setSyncStatus('syncing');
   showLoading(true, 'Loading data…');
   try {
@@ -860,27 +885,34 @@ async function apiFetch() {
       showToast('⚠️ Backend URL not configured. Go to Admin to set it.', '#F59E0B');
       showLoading(false); setSyncStatus('err'); return;
     }
-    const ep = u ? `${url}?email=${encodeURIComponent(u.email)}` : url;
-    const res = await fetch(ep, { redirect: 'follow' });
+    const ep = `${url}?email=${encodeURIComponent(u?.email || '')}&token=${encodeURIComponent(API_TOKEN)}`;
+    const res  = await fetch(ep, { redirect: 'follow' });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    cachedData.forecasts  = data.forecasts  || [];
-    cachedData.forecastsM = data.forecastsM || [];
-    cachedData.inbound    = data.inbound    || [];
-    cachedData.solved     = data.solved     || [];
-    cachedData.inboundD   = data.inboundD   || [];
-    cachedData.inboundT   = data.inboundT   || [];
-    cachedData.weeklyKPI   = data.weeklyKPI   || [];
-    cachedData.monthlyKPI  = data.monthlyKPI  || [];
-    cachedData.quarterlyKPI= data.quarterlyKPI|| [];
-    cachedData.slaData     = data.slaData     || [];
-    cachedData.csatTickets = data.csatTickets || [];
-    cachedData.forecastsD  = data.forecastsD  || [];
-    cachedData.cr          = data.cr          || [];
-    cachedData.subCR       = data.subCR       || [];
-    cachedData.config     = data.config     || {};
-    cachedRole   = data.role || 'viewer';
-    _csatCache   = {}; // bust CSAT render cache — new data arrived
+
+    cachedData.forecasts    = data.forecasts    || [];
+    cachedData.forecastsM   = data.forecastsM   || [];
+    cachedData.inbound      = data.inbound      || [];
+    cachedData.solved       = data.solved       || [];
+    cachedData.inboundD     = data.inboundD     || [];
+    cachedData.inboundT     = data.inboundT     || [];
+    cachedData.weeklyKPI    = data.weeklyKPI    || [];
+    cachedData.monthlyKPI   = data.monthlyKPI   || [];
+    cachedData.quarterlyKPI = data.quarterlyKPI || [];
+    cachedData.slaData      = data.slaData      || [];
+    cachedData.csatTickets  = data.csatTickets  || [];
+    cachedData.forecastsD   = data.forecastsD   || [];
+    cachedData.cr           = data.cr           || [];
+    cachedData.subCR        = data.subCR        || [];
+    cachedData.config       = data.config       || {};
+    cachedRole  = data.role || 'viewer';
+    _csatCache  = {}; // bust CSAT render cache — new data arrived
+
+    // ── 3. Save to localStorage cache ─────────────────────────────────────────
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: cachedData, role: cachedRole }));
+    } catch(e) { /* storage quota exceeded — cache not critical, continue */ }
+
     setSyncStatus('ok');
   } catch(err) {
     console.error('Fetch error:', err);
@@ -893,7 +925,8 @@ async function apiFetch() {
 
 async function apiPost(body) {
   const u = getUser();
-  const payload = { ...body, email: u?.email || '' };
+  // Include API_TOKEN in every POST payload so Code.gs can verify the request
+  const payload = { ...body, email: u?.email || '', token: API_TOKEN };
   const res = await fetch(scriptUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -2397,7 +2430,7 @@ async function doUpload(type) {
       }
       showToast(`✅ CR: ${crAdded}+${crUpd} · Sub CR: ${subAdded}+${subUpd}`, '#10B981');
       clearUpload(type);
-      await apiFetch();
+      await apiFetch(true);
       if (currentPage === 'cr')    renderCR();
       if (currentPage === 'subcr') renderSubCR();
     } catch(err) {
@@ -2426,7 +2459,7 @@ async function doUpload(type) {
       }
       showToast(`✅ CSAT: ${fmtN(totalAdded)} added · ${fmtN(totalUpdated)} updated`, '#10B981');
       clearUpload(type);
-      await apiFetch();
+      await apiFetch(true);
     } catch(err) {
       showToast('CSAT upload failed: ' + err.message, '#EF4444');
     } finally { showLoading(false); }
@@ -2454,7 +2487,7 @@ async function doUpload(type) {
     showToast(`✅ Uploaded: ${res.added||0} added, ${res.updated||0} updated`, '#10B981');
     clearUpload(type);
     // Refresh data
-    await apiFetch();
+    await apiFetch(true);
     if (currentPage === 'overview') renderOverview();
     if (currentPage === 'tracker')  renderTracker();
     if (currentPage === 'cr')       renderCR();
@@ -3453,7 +3486,7 @@ async function initApp() {
   if (u.email.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase()) {
     document.getElementById('btn-admin').style.display='';
   }
-  await apiFetch();
+  await apiFetch(); // uses cache if < 5 min old; hits backend on first load or after TTL
   // Refresh admin button after role is known
   if (isAdmin()) document.getElementById('btn-admin').style.display='';
   navTo('overview');
@@ -3465,7 +3498,8 @@ async function manualRefresh() {
   const icon = document.getElementById('refresh-icon');
   if (btn) btn.disabled = true;
   if (icon) icon.style.animation = 'spin360 .8s linear infinite';
-  await apiFetch();
+  // force=true: skip cache, fetch fresh from backend, then update cache
+  await apiFetch(true);
   _csatCache = {}; // bust CSAT render cache so tables reflect fresh data
   if (btn) btn.disabled = false;
   if (icon) icon.style.animation = '';
