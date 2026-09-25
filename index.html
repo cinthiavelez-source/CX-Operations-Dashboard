@@ -828,8 +828,9 @@ const MONTHS_FULL  = ['January','February','March','April','May','June','July','
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 // ─── STATE ──────────────────────────────────────────────────────────────────
-let cachedData   = { forecasts:[], forecastsM:[], forecastsD:[], inbound:[], solved:[], inboundD:[], inboundT:[], weeklyKPI:[], monthlyKPI:[], quarterlyKPI:[], slaData:[], csatTickets:[], cr:[], subCR:[], config:{} };
-let cachedRole   = 'viewer';
+let cachedData      = { forecasts:[], forecastsM:[], forecastsD:[], inbound:[], solved:[], inboundD:[], inboundT:[], weeklyKPI:[], monthlyKPI:[], quarterlyKPI:[], slaData:[], csatTickets:[], cr:[], subCR:[], config:{} };
+let cachedRole      = 'viewer';
+let lastFetchFailed = false; // true when the last network fetch failed (timeout / parse error)
 // cachedSince: earliest date covered by cachedData. null = full history loaded.
 // Starts as current month — matches the backend default.
 let cachedSince  = _currentMonthStart();
@@ -906,7 +907,7 @@ async function apiFetch(force = false, since = null, full = false) {
     } catch(e) { /* corrupt cache — fall through to network */ }
   }
 
-  // ── 2. Fetch from backend ────────────────────────────────────────────────────
+  // ── 2. Fetch from backend (with one automatic retry on failure) ─────────────
   setSyncStatus('syncing');
   showLoading(true, full ? 'Loading full history…' : 'Loading data…');
   try {
@@ -918,15 +919,28 @@ async function apiFetch(force = false, since = null, full = false) {
     }
     let ep = `${url}?email=${encodeURIComponent(u?.email || '')}&token=${encodeURIComponent(API_TOKEN)}`;
     if (full) {
-      ep += '&full=true';                         // all history
+      ep += '&full=true';                          // all history
     } else if (since) {
       ep += `&since=${encodeURIComponent(since)}`; // from this date onward
     }
     // (no since param → backend defaults to first of current month)
 
-    const res  = await fetch(ep, { redirect: 'follow' });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    // Retry helper: GAS occasionally times out under load; one silent retry avoids
+    // the user seeing an empty dashboard when the second attempt would succeed.
+    let data;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const res = await fetch(ep, { redirect: 'follow' });
+        data = await res.json();
+        if (data.error) throw new Error(data.error);
+        break; // success — exit retry loop
+      } catch(fetchErr) {
+        if (attempt === 2) throw fetchErr; // both attempts failed — propagate
+        console.warn('Fetch attempt 1 failed, retrying in 2s…', fetchErr.message);
+        showLoading(true, 'Retrying…');
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
 
     cachedData.forecasts    = data.forecasts    || [];
     cachedData.forecastsM   = data.forecastsM   || [];
@@ -943,8 +957,9 @@ async function apiFetch(force = false, since = null, full = false) {
     cachedData.cr           = data.cr           || [];
     cachedData.subCR        = data.subCR        || [];
     cachedData.config       = data.config       || {};
-    cachedRole  = data.role || 'viewer';
-    _csatCache  = {}; // bust CSAT render cache — new data arrived
+    cachedRole      = data.role || 'viewer';
+    lastFetchFailed = false;
+    _csatCache      = {}; // bust CSAT render cache — new data arrived
 
     // Track the earliest date now in cache (null = full history)
     cachedSince = full ? null : (since || _currentMonthStart());
@@ -958,8 +973,9 @@ async function apiFetch(force = false, since = null, full = false) {
 
     setSyncStatus('ok');
   } catch(err) {
-    console.error('Fetch error:', err);
-    showToast('Could not load data: ' + err.message, '#EF4444');
+    lastFetchFailed = true;
+    console.error('Fetch error (both attempts):', err);
+    showToast('⚠️ Could not load data — click Refresh to retry. (' + err.message + ')', '#EF4444');
     setSyncStatus('err');
   } finally {
     showLoading(false);
@@ -1388,7 +1404,12 @@ const OV_COLS = [
 
 function renderWeeklyTable(tbl, summary) {
   const rows = getWeeklyData();
-  if (!rows.length) { tbl.innerHTML = emptyState('No data yet. Upload your forecast and inbound CSVs to get started.'); return; }
+  if (!rows.length) {
+    tbl.innerHTML = lastFetchFailed
+      ? emptyState('⚠️ Data failed to load. Click <strong>Refresh</strong> to try again.')
+      : emptyState('No data yet. Upload your forecast and inbound CSVs to get started.');
+    return;
+  }
 
   // Summary stats — use last 8 PAST weeks only (exclude future forecast-only rows)
   const todayStr = new Date().toISOString().split('T')[0];
