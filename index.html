@@ -816,8 +816,8 @@ const URL_KEY    = 'cxdash_url';
 // Shared secret — must match API_TOKEN in Code.gs. Change both together when rotating.
 const API_TOKEN  = 'cxdash-cu-2026';
 // localStorage data cache — avoids a backend round-trip on every page load.
-// v2: cache now stores 'since' field; bumping key busts the old v1 cache.
-const CACHE_KEY  = 'cxdash_data_v2';
+// v3: default window changed from current-month to current-year; busting old v2 cache.
+const CACHE_KEY  = 'cxdash_data_v3';
 const CACHE_TTL  = 5 * 60 * 1000; // 5 minutes in ms
 // Day-of-week distribution factors derived from 2025 historical data (Sun=0…Sat=6)
 const DOW = [0.099, 0.150, 0.168, 0.205, 0.160, 0.136, 0.082];
@@ -832,8 +832,8 @@ let cachedData      = { forecasts:[], forecastsM:[], forecastsD:[], inbound:[], 
 let cachedRole      = 'viewer';
 let lastFetchFailed = false; // true when the last network fetch failed (timeout / parse error)
 // cachedSince: earliest date covered by cachedData. null = full history loaded.
-// Starts as current month — matches the backend default.
-let cachedSince  = _currentMonthStart();
+// Starts as current year — matches the backend default (Jan 1 of this year).
+let cachedSince  = _currentYearStart();
 let currentPage  = 'overview';
 let ovMode       = 'weekly';
 let trackerYear  = 2026;
@@ -861,6 +861,11 @@ function doLogout() {
 function isAdmin()  { return cachedRole === 'admin' || (getUser()?.email?.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase()); }
 
 // ─── DATE RANGE HELPERS ───────────────────────────────────────────────────────
+
+// Returns "YYYY-01-01" for the first day of the current year.
+function _currentYearStart() {
+  return `${new Date().getFullYear()}-01-01`;
+}
 
 // Returns "YYYY-MM-01" for the first day of the current month.
 function _currentMonthStart() {
@@ -891,7 +896,7 @@ async function apiFetch(force = false, since = null, full = false) {
     try {
       const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
       if (cached && cached.ts && (Date.now() - cached.ts) < CACHE_TTL) {
-        const cacheSince = cached.since ?? _currentMonthStart(); // null = full history
+        const cacheSince = cached.since ?? _currentYearStart(); // null = full history
         // Accept cache only if it covers the requested range
         const needsOlder = since && cacheSince !== null && since < cacheSince;
         const needsFull  = full  && cacheSince !== null;
@@ -962,7 +967,7 @@ async function apiFetch(force = false, since = null, full = false) {
     _csatCache      = {}; // bust CSAT render cache — new data arrived
 
     // Track the earliest date now in cache (null = full history)
-    cachedSince = full ? null : (since || _currentMonthStart());
+    cachedSince = full ? null : (since || _currentYearStart());
 
     // ── 3. Save to localStorage cache ─────────────────────────────────────────
     try {
@@ -3581,9 +3586,9 @@ async function manualRefresh() {
   if (icon) icon.style.animation = 'spin360 .8s linear infinite';
   // Refresh respects the current cache range:
   //   - If full history was loaded (Monthly/Quarterly view), re-fetch full history.
-  //   - Otherwise, re-fetch current-month data (fast default).
+  //   - Otherwise, re-fetch year-to-date (fast default).
   const needFull = cachedSince === null;
-  await apiFetch(true, null, needFull);
+  await apiFetch(true, needFull ? null : _currentYearStart(), needFull);
   _csatCache = {}; // bust CSAT render cache so tables reflect fresh data
   if (btn) btn.disabled = false;
   if (icon) icon.style.animation = '';
