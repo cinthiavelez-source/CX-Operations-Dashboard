@@ -815,8 +815,9 @@ const USER_KEY   = 'cxdash_user';
 const URL_KEY    = 'cxdash_url';
 // Shared secret — must match API_TOKEN in Code.gs. Change both together when rotating.
 const API_TOKEN  = 'cxdash-cu-2026';
-// localStorage data cache — avoids a backend round-trip on every page load
-const CACHE_KEY  = 'cxdash_data_v1';
+// localStorage data cache — avoids a backend round-trip on every page load.
+// v2: cache now stores 'since' field; bumping key busts the old v1 cache.
+const CACHE_KEY  = 'cxdash_data_v2';
 const CACHE_TTL  = 5 * 60 * 1000; // 5 minutes in ms
 // Day-of-week distribution factors derived from 2025 historical data (Sun=0…Sat=6)
 const DOW = [0.099, 0.150, 0.168, 0.205, 0.160, 0.136, 0.082];
@@ -829,6 +830,9 @@ const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 // ─── STATE ──────────────────────────────────────────────────────────────────
 let cachedData   = { forecasts:[], forecastsM:[], forecastsD:[], inbound:[], solved:[], inboundD:[], inboundT:[], weeklyKPI:[], monthlyKPI:[], quarterlyKPI:[], slaData:[], csatTickets:[], cr:[], subCR:[], config:{} };
 let cachedRole   = 'viewer';
+// cachedSince: earliest date covered by cachedData. null = full history loaded.
+// Starts as current month — matches the backend default.
+let cachedSince  = _currentMonthStart();
 let currentPage  = 'overview';
 let ovMode       = 'weekly';
 let trackerYear  = 2026;
@@ -855,29 +859,56 @@ function doLogout() {
 }
 function isAdmin()  { return cachedRole === 'admin' || (getUser()?.email?.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase()); }
 
+// ─── DATE RANGE HELPERS ───────────────────────────────────────────────────────
+
+// Returns "YYYY-MM-01" for the first day of the current month.
+function _currentMonthStart() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+}
+
+// Returns a YYYY-MM-DD date string N days ago.
+function _daysAgo(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
 // ─── API ─────────────────────────────────────────────────────────────────────
 
-// apiFetch(force): load data from backend.
-//   force=false (default): use localStorage cache if < CACHE_TTL old (instant load).
-//   force=true : skip cache, hit backend, then refresh cache (Refresh button / post-upload).
-async function apiFetch(force = false) {
+// apiFetch(force, since, full): load data from backend.
+//   force : skip cache and always hit the backend.
+//   since : YYYY-MM-DD — fetch rows on/after this date (null = use backend default = current month).
+//   full  : true — fetch complete history (overrides since).
+//
+// On load: apiFetch() → backend defaults to current month → fast.
+// On Monthly/Quarterly click: apiFetch(true, null, true) → full history.
+// On previous-month navigation: apiFetch(true, '2026-08-01') → that month onward.
+async function apiFetch(force = false, since = null, full = false) {
   // ── 1. Try cache first (unless forced) ──────────────────────────────────────
   if (!force) {
     try {
       const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
       if (cached && cached.ts && (Date.now() - cached.ts) < CACHE_TTL) {
-        Object.assign(cachedData, cached.data);
-        cachedRole = cached.role || 'viewer';
-        _csatCache = {};
-        setSyncStatus('ok');
-        return; // served from cache — no network call needed
+        const cacheSince = cached.since ?? _currentMonthStart(); // null = full history
+        // Accept cache only if it covers the requested range
+        const needsOlder = since && cacheSince !== null && since < cacheSince;
+        const needsFull  = full  && cacheSince !== null;
+        if (!needsOlder && !needsFull) {
+          Object.assign(cachedData, cached.data);
+          cachedRole  = cached.role || 'viewer';
+          cachedSince = cacheSince;
+          _csatCache  = {};
+          setSyncStatus('ok');
+          return; // served from cache — no network call needed
+        }
       }
     } catch(e) { /* corrupt cache — fall through to network */ }
   }
 
   // ── 2. Fetch from backend ────────────────────────────────────────────────────
   setSyncStatus('syncing');
-  showLoading(true, 'Loading data…');
+  showLoading(true, full ? 'Loading full history…' : 'Loading data…');
   try {
     const u = getUser();
     const url = scriptUrl();
@@ -885,7 +916,14 @@ async function apiFetch(force = false) {
       showToast('⚠️ Backend URL not configured. Go to Admin to set it.', '#F59E0B');
       showLoading(false); setSyncStatus('err'); return;
     }
-    const ep = `${url}?email=${encodeURIComponent(u?.email || '')}&token=${encodeURIComponent(API_TOKEN)}`;
+    let ep = `${url}?email=${encodeURIComponent(u?.email || '')}&token=${encodeURIComponent(API_TOKEN)}`;
+    if (full) {
+      ep += '&full=true';                         // all history
+    } else if (since) {
+      ep += `&since=${encodeURIComponent(since)}`; // from this date onward
+    }
+    // (no since param → backend defaults to first of current month)
+
     const res  = await fetch(ep, { redirect: 'follow' });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
@@ -908,9 +946,14 @@ async function apiFetch(force = false) {
     cachedRole  = data.role || 'viewer';
     _csatCache  = {}; // bust CSAT render cache — new data arrived
 
+    // Track the earliest date now in cache (null = full history)
+    cachedSince = full ? null : (since || _currentMonthStart());
+
     // ── 3. Save to localStorage cache ─────────────────────────────────────────
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: cachedData, role: cachedRole }));
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        ts: Date.now(), data: cachedData, role: cachedRole, since: cachedSince
+      }));
     } catch(e) { /* storage quota exceeded — cache not critical, continue */ }
 
     setSyncStatus('ok');
@@ -921,6 +964,18 @@ async function apiFetch(force = false) {
   } finally {
     showLoading(false);
   }
+}
+
+// ensureData(neededSince): guarantee cachedData covers neededSince.
+//   neededSince = null  → need full history; fetch if not already loaded.
+//   neededSince = 'YYYY-MM-DD' → fetch from that date if cache doesn't reach back that far.
+async function ensureData(neededSince) {
+  if (cachedSince === null) return;                         // full history already loaded
+  if (neededSince === null) {
+    await apiFetch(true, null, true); return;              // request full history
+  }
+  if (neededSince >= cachedSince) return;                   // already covered
+  await apiFetch(true, neededSince, false);                 // fetch from earlier date
 }
 
 async function apiPost(body) {
@@ -1294,11 +1349,13 @@ function getDailyData(year, month) {
 }
 
 // ─── OVERVIEW RENDER ─────────────────────────────────────────────────────────
-function setOvMode(m) {
+async function setOvMode(m) {
   ovMode = m;
   ['weekly','monthly','quarterly'].forEach(x => {
     document.getElementById('tb-'+x).classList.toggle('active', x===m);
   });
+  // Monthly/Quarterly views need full history — fetch if we only have partial data
+  if (m === 'monthly' || m === 'quarterly') await ensureData(null);
   renderOverview();
 }
 
@@ -1988,10 +2045,13 @@ function renderCSATView() {
 }
 
 // ─── DAILY TRACKER RENDER ─────────────────────────────────────────────────────
-function changeMonth(delta) {
+async function changeMonth(delta) {
   trackerMonth += delta;
   if (trackerMonth > 11) { trackerMonth = 0;  trackerYear++; }
   if (trackerMonth < 0)  { trackerMonth = 11; trackerYear--; }
+  // Ensure we have data for the requested month — fetches if not in cache
+  const monthStart = `${trackerYear}-${String(trackerMonth+1).padStart(2,'0')}-01`;
+  await ensureData(monthStart);
   renderTracker();
 }
 
@@ -3498,8 +3558,11 @@ async function manualRefresh() {
   const icon = document.getElementById('refresh-icon');
   if (btn) btn.disabled = true;
   if (icon) icon.style.animation = 'spin360 .8s linear infinite';
-  // force=true: skip cache, fetch fresh from backend, then update cache
-  await apiFetch(true);
+  // Refresh respects the current cache range:
+  //   - If full history was loaded (Monthly/Quarterly view), re-fetch full history.
+  //   - Otherwise, re-fetch current-month data (fast default).
+  const needFull = cachedSince === null;
+  await apiFetch(true, null, needFull);
   _csatCache = {}; // bust CSAT render cache so tables reflect fresh data
   if (btn) btn.disabled = false;
   if (icon) icon.style.animation = '';
@@ -3514,7 +3577,7 @@ async function manualRefresh() {
 let channelView = 'weekly';
 const channelLimit = { daily: 30, weekly: 12, monthly: 12 };
 
-function setChannelView(v) {
+async function setChannelView(v) {
   channelView = v;
   ['daily','weekly','monthly'].forEach(m => {
     const b = document.getElementById('ch-tb-' + m);
@@ -3522,6 +3585,9 @@ function setChannelView(v) {
   });
   const wrap = document.getElementById('ch-limit-wrap');
   if (wrap) wrap.innerHTML = _chLimitHTML();
+  // Monthly channel view needs full history; weekly needs ~90 days (12 weeks + buffer)
+  if (v === 'monthly') await ensureData(null);
+  else if (v === 'weekly') await ensureData(_daysAgo(90));
   renderChannels();
 }
 
