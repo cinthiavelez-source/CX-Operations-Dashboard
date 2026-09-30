@@ -831,9 +831,10 @@ const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct
 let cachedData      = { forecasts:[], forecastsM:[], forecastsD:[], inbound:[], solved:[], inboundD:[], inboundT:[], weeklyKPI:[], monthlyKPI:[], quarterlyKPI:[], slaData:[], csatTickets:[], cr:[], subCR:[], config:{} };
 let cachedRole      = 'viewer';
 let lastFetchFailed = false; // true when the last network fetch failed (timeout / parse error)
+let lastFetchError  = '';
 // cachedSince: earliest date covered by cachedData. null = full history loaded.
-// Starts as current year — matches the backend default (Jan 1 of this year).
-let cachedSince  = _currentYearStart();
+// Start with the same recent window used for the first request.
+let cachedSince  = _daysAgo(70);
 let currentPage  = 'overview';
 let ovMode       = 'weekly';
 let trackerYear  = 2026;
@@ -887,18 +888,20 @@ function _daysAgo(n) {
 //   since : YYYY-MM-DD — fetch rows on/after this date (null = use backend default = current month).
 //   full  : true — fetch complete history (overrides since).
 //
-// On load: apiFetch() → backend defaults to current month → fast.
+// On load: apiFetch() → recent weeks only, keeping the first response small.
 // On Monthly/Quarterly click: apiFetch(true, null, true) → full history.
 // On previous-month navigation: apiFetch(true, '2026-08-01') → that month onward.
 async function apiFetch(force = false, since = null, full = false) {
+  const requestSince = full ? null : (since || _daysAgo(70));
   // ── 1. Try cache first (unless forced) ──────────────────────────────────────
   if (!force) {
     try {
       const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
       if (cached && cached.ts && (Date.now() - cached.ts) < CACHE_TTL) {
-        const cacheSince = cached.since ?? _currentYearStart(); // null = full history
+        const cacheSince = Object.prototype.hasOwnProperty.call(cached, 'since')
+          ? cached.since : _daysAgo(70); // null = full history
         // Accept cache only if it covers the requested range
-        const needsOlder = since && cacheSince !== null && since < cacheSince;
+        const needsOlder = requestSince && cacheSince !== null && requestSince < cacheSince;
         const needsFull  = full  && cacheSince !== null;
         if (!needsOlder && !needsFull) {
           Object.assign(cachedData, cached.data);
@@ -925,10 +928,9 @@ async function apiFetch(force = false, since = null, full = false) {
     let ep = `${url}?email=${encodeURIComponent(u?.email || '')}&token=${encodeURIComponent(API_TOKEN)}`;
     if (full) {
       ep += '&full=true';                          // all history
-    } else if (since) {
-      ep += `&since=${encodeURIComponent(since)}`; // from this date onward
+    } else if (requestSince) {
+      ep += `&since=${encodeURIComponent(requestSince)}`; // from this date onward
     }
-    // (no since param → backend defaults to first of current month)
 
     // Retry helper: GAS occasionally times out under load; one silent retry avoids
     // the user seeing an empty dashboard when the second attempt would succeed.
@@ -936,7 +938,13 @@ async function apiFetch(force = false, since = null, full = false) {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const res = await fetch(ep, { redirect: 'follow' });
-        data = await res.json();
+        const body = await res.text();
+        if (!res.ok) throw new Error(`Data service returned HTTP ${res.status}.`);
+        if (body.trimStart().startsWith('<')) {
+          throw new Error('Google Apps Script returned a web page instead of dashboard data. Check the active web app deployment and its access settings.');
+        }
+        try { data = JSON.parse(body); }
+        catch (_) { throw new Error('Google Apps Script returned an unreadable response.'); }
         if (data.error) throw new Error(data.error);
         break; // success — exit retry loop
       } catch(fetchErr) {
@@ -964,10 +972,11 @@ async function apiFetch(force = false, since = null, full = false) {
     cachedData.config       = data.config       || {};
     cachedRole      = data.role || 'viewer';
     lastFetchFailed = false;
+    lastFetchError  = '';
     _csatCache      = {}; // bust CSAT render cache — new data arrived
 
     // Track the earliest date now in cache (null = full history)
-    cachedSince = full ? null : (since || _currentYearStart());
+    cachedSince = requestSince;
 
     // ── 3. Save to localStorage cache ─────────────────────────────────────────
     try {
@@ -979,6 +988,7 @@ async function apiFetch(force = false, since = null, full = false) {
     setSyncStatus('ok');
   } catch(err) {
     lastFetchFailed = true;
+    lastFetchError = String(err.message || 'Unknown connection error');
     console.error('Fetch error (both attempts):', err);
     showToast('⚠️ Could not load data — click Refresh to retry. (' + err.message + ')', '#EF4444');
     setSyncStatus('err');
@@ -1233,7 +1243,7 @@ function getMonthlyData() {
     mmap[mName].totalFCST = mFcstMap[mName].total;
   });
 
-  // Override inbound volume with direct calendar-month aggregation from Daily_Inbound
+  // Override Only Inbound with direct calendar-month aggregation from Daily_Inbound
   // This avoids week-boundary distortion (e.g. Dec 28–31 counted in Jan via week labels)
   const mInbMap = {};
   (cachedData.inboundD || []).forEach(d => {
@@ -1243,13 +1253,10 @@ function getMonthlyData() {
     const [, mIdx] = mo.split('-');
     const mName = MONTHS_FULL[+mIdx - 1];
     if (!mName) return;
-    if (!mInbMap[mName]) mInbMap[mName] = { chat: 0, email: 0, total: 0, chatT: 0, emailT: 0, totalT: 0 };
+    if (!mInbMap[mName]) mInbMap[mName] = { chat: 0, email: 0, total: 0 };
     mInbMap[mName].chat   += n(d.chatOnly);
     mInbMap[mName].email  += n(d.emailOnly);
     mInbMap[mName].total  += n(d.totalOnly) || (n(d.chatOnly) + n(d.emailOnly));
-    mInbMap[mName].chatT  += n(d.chatTotal);
-    mInbMap[mName].emailT += n(d.emailTotal);
-    mInbMap[mName].totalT += n(d.totalTotal) || (n(d.chatTotal) + n(d.emailTotal));
   });
   Object.keys(mInbMap).forEach(mName => {
     if (!mmap[mName]) return; // only override months already in mmap
@@ -1258,11 +1265,6 @@ function getMonthlyData() {
       mmap[mName].chatOnly  = v.chat;
       mmap[mName].emailOnly = v.email;
       mmap[mName].totalOnly = v.total;
-    }
-    if (v.totalT > 0) {
-      mmap[mName].chatTotal  = v.chatT;
-      mmap[mName].emailTotal = v.emailT;
-      mmap[mName].totalTotal = v.totalT;
     }
   });
 
@@ -1290,8 +1292,6 @@ function getMonthlyData() {
     mmap[mName].emailTotal = v.email;
     mmap[mName].totalTotal = v.total;
   });
-
-
 
   return MONTHS_FULL.filter(m=>mmap[m]).map(m => {
     const r = mmap[m];
@@ -1438,7 +1438,7 @@ function renderWeeklyTable(tbl, summary) {
   const rows = getWeeklyData();
   if (!rows.length) {
     tbl.innerHTML = lastFetchFailed
-      ? emptyState('⚠️ Data failed to load. Click <strong>Refresh</strong> to try again.')
+      ? emptyState('⚠️ Data failed to load: ' + escapeHTML(lastFetchError) + ' If the deployment needs fixing, Refresh will keep showing this error until it is updated.')
       : emptyState('No data yet. Upload your forecast and inbound CSVs to get started.');
     return;
   }
@@ -3538,6 +3538,7 @@ function fmtDate(dateStr) {
   return `${d.getMonth()+1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`;
 }
 function n(v)    { const f=parseFloat(v); return isNaN(f)?0:f; }
+function escapeHTML(value) { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function pad(v)  { return String(v).padStart(2,'0'); }
 function avg(arr){ return arr.length ? arr.reduce((s,v)=>s+v,0)/arr.length : null; }
 
@@ -3615,7 +3616,7 @@ async function manualRefresh() {
   //   - If full history was loaded (Monthly/Quarterly view), re-fetch full history.
   //   - Otherwise, re-fetch year-to-date (fast default).
   const needFull = cachedSince === null;
-  await apiFetch(true, needFull ? null : _currentYearStart(), needFull);
+  await apiFetch(true, needFull ? null : cachedSince, needFull);
   _csatCache = {}; // bust CSAT render cache so tables reflect fresh data
   if (btn) btn.disabled = false;
   if (icon) icon.style.animation = '';
