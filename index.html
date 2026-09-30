@@ -1266,6 +1266,33 @@ function getMonthlyData() {
     }
   });
 
+  // Inb+Out comes from Daily_InbOut, not Daily_Inbound. Sum its dated rows
+  // by calendar month so weeks crossing month boundaries cannot move volume.
+  const overviewYear = Number(cachedData.config?.currentYear) || new Date().getFullYear();
+  const mInbOutMap = {};
+  let firstDailyTotalMonth = 13;
+  (cachedData.inboundT || []).forEach(d => {
+    const dt = _normWS(d.date);
+    if (!dt.startsWith(`${overviewYear}-`)) return;
+    const monthIndex = Number(dt.slice(5, 7));
+    if (monthIndex < 1 || monthIndex > 12) return;
+    firstDailyTotalMonth = Math.min(firstDailyTotalMonth, monthIndex);
+    const mName = MONTHS_FULL[monthIndex - 1];
+    if (!mInbOutMap[mName]) mInbOutMap[mName] = { chat: 0, email: 0, total: 0 };
+    mInbOutMap[mName].chat  += n(d.chatTotal);
+    mInbOutMap[mName].email += n(d.emailTotal);
+    mInbOutMap[mName].total += n(d.totalTotal) || (n(d.chatTotal) + n(d.emailTotal));
+  });
+  MONTHS_FULL.forEach((mName, i) => {
+    if (!mmap[mName] || i + 1 < firstDailyTotalMonth) return;
+    const v = mInbOutMap[mName] || { chat: 0, email: 0, total: 0 };
+    mmap[mName].chatTotal  = v.chat;
+    mmap[mName].emailTotal = v.email;
+    mmap[mName].totalTotal = v.total;
+  });
+
+
+
   return MONTHS_FULL.filter(m=>mmap[m]).map(m => {
     const r = mmap[m];
     return { ...r,
