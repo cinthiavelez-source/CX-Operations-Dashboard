@@ -815,10 +815,11 @@ const USER_KEY   = 'cxdash_user';
 const URL_KEY    = 'cxdash_url';
 // Shared secret — must match API_TOKEN in Code.gs. Change both together when rotating.
 const API_TOKEN  = 'cxdash-cu-2026';
-// localStorage data cache — avoids a backend round-trip on every page load.
-// v3: default window changed from current-month to current-year; busting old v2 cache.
-const CACHE_KEY  = 'cxdash_data_v3';
+// Short-lived full view; older dated rows are stored separately in IndexedDB.
+const CACHE_KEY  = 'cxdash_data_v4';
 const CACHE_TTL  = 5 * 60 * 1000; // 5 minutes in ms
+const HISTORY_DB = 'cxdash-history-v1';
+const HISTORY_FIELDS = ['forecastsD','solved','inboundD','inboundT','slaData','csatTickets'];
 // Day-of-week distribution factors derived from 2025 historical data (Sun=0…Sat=6)
 const DOW = [0.099, 0.150, 0.168, 0.205, 0.160, 0.136, 0.082];
 // Default channel split (Live = 33.7%, Email = 66.3%)
@@ -832,9 +833,8 @@ let cachedData      = { forecasts:[], forecastsM:[], forecastsD:[], inbound:[], 
 let cachedRole      = 'viewer';
 let lastFetchFailed = false; // true when the last network fetch failed (timeout / parse error)
 let lastFetchError  = '';
-// cachedSince: earliest date covered by cachedData. null = full history loaded.
-// Start with the same recent window used for the first request.
-let cachedSince  = _daysAgo(70);
+// null means the assembled view includes historical and recent rows.
+let cachedSince  = _currentYearStart();
 let currentPage  = 'overview';
 let ovMode       = 'weekly';
 let trackerYear  = 2026;
@@ -854,9 +854,13 @@ function doLogin() {
   document.getElementById('login-overlay').style.display = 'none';
   initApp();
 }
-function doLogout() {
+async function doLogout() {
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(CACHE_KEY); // clear data cache on sign-out
+  await new Promise(resolve => {
+    const req = indexedDB.deleteDatabase(HISTORY_DB);
+    req.onsuccess = req.onerror = req.onblocked = resolve;
+  });
   location.reload();
 }
 function isAdmin()  { return cachedRole === 'admin' || (getUser()?.email?.toLowerCase() === DEFAULT_ADMIN_EMAIL.toLowerCase()); }
@@ -883,30 +887,92 @@ function _daysAgo(n) {
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
-// apiFetch(force, since, full): load data from backend.
-//   force : skip cache and always hit the backend.
-//   since : YYYY-MM-DD — fetch rows on/after this date (null = use backend default = current month).
-//   full  : true — fetch complete history (overrides since).
-//
-// On load: apiFetch() → recent weeks only, keeping the first response small.
-// On Monthly/Quarterly click: apiFetch(true, null, true) → full history.
-// On previous-month navigation: apiFetch(true, '2026-08-01') → that month onward.
+function _historyKey() {
+  return `${_currentYearStart()}|${scriptUrl()}|${getUser()?.email || ''}`;
+}
+
+function _openHistoryDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(HISTORY_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('snapshots');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function _readHistory() {
+  const db = await _openHistoryDb();
+  try {
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction('snapshots', 'readonly').objectStore('snapshots').get(_historyKey());
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } finally { db.close(); }
+}
+
+async function _writeHistory(snapshot) {
+  const db = await _openHistoryDb();
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('snapshots', 'readwrite');
+      tx.objectStore('snapshots').put(snapshot, _historyKey());
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally { db.close(); }
+}
+
+function _historyWindows(start, end) {
+  const windows = [];
+  while (start < end) {
+    const next = new Date(start + 'T00:00:00Z');
+    next.setUTCDate(next.getUTCDate() + 55);
+    const until = next.toISOString().slice(0, 10) < end ? next.toISOString().slice(0, 10) : end;
+    windows.push({ since: start, until });
+    start = until;
+  }
+  return windows;
+}
+
+async function _fetchDashboardWindow(since, until, dataOnly = false) {
+  const u = getUser();
+  let ep = `${scriptUrl()}?email=${encodeURIComponent(u?.email || '')}&token=${encodeURIComponent(API_TOKEN)}`;
+  ep += `&since=${encodeURIComponent(since)}`;
+  if (until) ep += `&until=${encodeURIComponent(until)}`;
+  if (dataOnly) ep += '&dataOnly=true';
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await fetch(ep, { redirect: 'follow' });
+      const body = await res.text();
+      if (!res.ok) throw new Error(`Data service returned HTTP ${res.status}.`);
+      if (body.trimStart().startsWith('<')) {
+        throw new Error('Google Apps Script returned a web page instead of dashboard data. Check the active web app deployment and its access settings.');
+      }
+      let data;
+      try { data = JSON.parse(body); }
+      catch (_) { throw new Error('Google Apps Script returned an unreadable response.'); }
+      if (data.error) throw new Error(data.error);
+      return data;
+    } catch(err) {
+      if (attempt === 2) throw err;
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+}
+
+// Google Sheets remains the source of truth. Older rows are fetched once into
+// IndexedDB; each opening re-fetches 35 recent days so 30-day corrections appear.
 async function apiFetch(force = false, since = null, full = false) {
-  const requestSince = full ? null : (since || _daysAgo(70));
   // ── 1. Try cache first (unless forced) ──────────────────────────────────────
   if (!force) {
     try {
       const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
       if (cached && cached.ts && (Date.now() - cached.ts) < CACHE_TTL) {
-        const cacheSince = Object.prototype.hasOwnProperty.call(cached, 'since')
-          ? cached.since : _daysAgo(70); // null = full history
-        // Accept cache only if it covers the requested range
-        const needsOlder = requestSince && cacheSince !== null && requestSince < cacheSince;
-        const needsFull  = full  && cacheSince !== null;
-        if (!needsOlder && !needsFull) {
+        if (cached.since === null) {
           Object.assign(cachedData, cached.data);
           cachedRole  = cached.role || 'viewer';
-          cachedSince = cacheSince;
+          cachedSince = null;
           _csatCache  = {};
           setSyncStatus('ok');
           return; // served from cache — no network call needed
@@ -915,45 +981,44 @@ async function apiFetch(force = false, since = null, full = false) {
     } catch(e) { /* corrupt cache — fall through to network */ }
   }
 
-  // ── 2. Fetch from backend (with one automatic retry on failure) ─────────────
+  // ── 2. Fetch the recent window and fill older history from local storage ───
   setSyncStatus('syncing');
-  showLoading(true, full ? 'Loading full history…' : 'Loading data…');
+  showLoading(true, 'Loading dashboard data…');
   try {
-    const u = getUser();
     const url = scriptUrl();
     if (!url || url === 'YOUR_EXEC_URL_HERE') {
       showToast('⚠️ Backend URL not configured. Go to Admin to set it.', '#F59E0B');
       showLoading(false); setSyncStatus('err'); return;
     }
-    let ep = `${url}?email=${encodeURIComponent(u?.email || '')}&token=${encodeURIComponent(API_TOKEN)}`;
-    if (full) {
-      ep += '&full=true';                          // all history
-    } else if (requestSince) {
-      ep += `&since=${encodeURIComponent(requestSince)}`; // from this date onward
+    const cutoff = _daysAgo(35);
+    const recent = await _fetchDashboardWindow(cutoff, null, false);
+    if (recent.apiVersion !== 2) {
+      throw new Error('The new Code.gs is not active yet. Deploy a new version of the existing Apps Script web app, then refresh.');
     }
-
-    // Retry helper: GAS occasionally times out under load; one silent retry avoids
-    // the user seeing an empty dashboard when the second attempt would succeed.
-    let data;
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        const res = await fetch(ep, { redirect: 'follow' });
-        const body = await res.text();
-        if (!res.ok) throw new Error(`Data service returned HTTP ${res.status}.`);
-        if (body.trimStart().startsWith('<')) {
-          throw new Error('Google Apps Script returned a web page instead of dashboard data. Check the active web app deployment and its access settings.');
-        }
-        try { data = JSON.parse(body); }
-        catch (_) { throw new Error('Google Apps Script returned an unreadable response.'); }
-        if (data.error) throw new Error(data.error);
-        break; // success — exit retry loop
-      } catch(fetchErr) {
-        if (attempt === 2) throw fetchErr; // both attempts failed — propagate
-        console.warn('Fetch attempt 1 failed, retrying in 2s…', fetchErr.message);
-        showLoading(true, 'Retrying…');
-        await new Promise(r => setTimeout(r, 2000));
-      }
+    let saved = null;
+    try { saved = await _readHistory(); } catch (_) { /* browser storage unavailable */ }
+    const historyStart = `${new Date().getFullYear() - 1}-12-01`;
+    if (!saved || !saved.data || saved.through < historyStart || saved.through > cutoff) {
+      saved = { through: historyStart, data: {} };
     }
+    const historical = {};
+    HISTORY_FIELDS.forEach(field => { historical[field] = (saved.data[field] || []).slice(); });
+    const windows = _historyWindows(saved.through, cutoff);
+    for (let i = 0; i < windows.length; i += 2) {
+      showLoading(true, `Loading saved history ${Math.min(i + 2, windows.length)}/${windows.length}…`);
+      const batch = await Promise.all(windows.slice(i, i + 2).map(w =>
+        _fetchDashboardWindow(w.since, w.until, true)));
+      batch.forEach(part => {
+        if (part.apiVersion !== 2) throw new Error('Code.gs deployment version changed while loading.');
+        HISTORY_FIELDS.forEach(field => historical[field].push(...(part[field] || [])));
+      });
+    }
+    if (windows.length) {
+      try { await _writeHistory({ through: cutoff, data: historical }); }
+      catch (_) { showToast('History loaded, but this browser could not save it for next time.', '#F59E0B'); }
+    }
+    const data = { ...recent };
+    HISTORY_FIELDS.forEach(field => { data[field] = historical[field].concat(recent[field] || []); });
 
     cachedData.forecasts    = data.forecasts    || [];
     cachedData.forecastsM   = data.forecastsM   || [];
@@ -976,7 +1041,7 @@ async function apiFetch(force = false, since = null, full = false) {
     _csatCache      = {}; // bust CSAT render cache — new data arrived
 
     // Track the earliest date now in cache (null = full history)
-    cachedSince = requestSince;
+    cachedSince = null;
 
     // ── 3. Save to localStorage cache ─────────────────────────────────────────
     try {
