@@ -256,6 +256,7 @@ tbody td:first-child{position:sticky;left:0;background:inherit;z-index:5;font-we
     <div>
       <h3>Daily Tracker</h3>
       <div style="font-size:11px;opacity:.7;margin-top:2px">Forecast vs Solved Tickets · Current Month</div>
+      <div id="tracker-sla-date" style="font-size:11px;opacity:.85;margin-top:3px"></div>
     </div>
     <div class="month-nav">
       <button onclick="changeMonth(-1)">‹</button>
@@ -2295,6 +2296,11 @@ function renderTracker() {
     MONTHS_SHORT[trackerMonth] + ' ' + trackerYear;
   const groups = getDailyData(trackerYear, trackerMonth);
   const container = document.getElementById('tracker-content');
+  const monthKey = `${trackerYear}-${pad(trackerMonth+1)}`;
+  const slaDates = (cachedData.slaData || []).map(d => _normWS(d.date))
+    .filter(date => date.startsWith(monthKey + '-')).sort();
+  document.getElementById('tracker-sla-date').textContent = slaDates.length
+    ? `Latest SLA date in this month: ${fmtDate(slaDates[slaDates.length - 1])}` : '';
   if (!groups.length) {
     container.innerHTML = `<div class="empty-state"><p>No data for this month.</p><small>Upload solved tickets and forecast CSVs for ${MONTHS_FULL[trackerMonth]} ${trackerYear}.</small></div>`;
     return;
@@ -2671,6 +2677,9 @@ function processUploadFile(file, type) {
         const crN = (r.crRecords||[]).length, subN = (r.subCrRecords||[]).length;
         if (!crN && !subN) preview.textContent = '⚠️ No records parsed. Check file format.';
         else preview.textContent = `✅ Parsed ${crN} CR records · ${subN} Sub CR records. Ready to upload.`;
+      } else if (type === 'sla' && records.length) {
+        const dates = records.map(r => r.date).filter(Boolean).sort();
+        preview.textContent = `✅ Parsed ${records.length} SLA records, ${fmtDate(dates[0])} through ${fmtDate(dates[dates.length-1])}. Later dates are not in this file. Ready to upload.`;
       } else {
         preview.textContent = `✅ Parsed ${records.length} records. Ready to upload.`;
         if (records.length === 0) preview.textContent = '⚠️ No records parsed. Check file format.';
